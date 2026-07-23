@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, GitBranch, ShieldCheck } from "lucide-react";
 
+import { SyncInstallationsButton } from "@/components/dashboard/sync-installations-button";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -9,7 +10,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { getGitHubAppInstallUrl, isGitHubAppConfigured } from "@/lib/github";
+import {
+  getGitHubAppInstallUrl,
+  isGitHubAppConfigured,
+} from "@/lib/github/config";
 
 export function ConnectRepoCard() {
   const installUrl = getGitHubAppInstallUrl();
@@ -25,9 +29,8 @@ export function ConnectRepoCard() {
           <div className="space-y-1">
             <CardTitle className="text-base">Connect a repository</CardTitle>
             <CardDescription className="text-sm leading-relaxed">
-              Install the GitHub App and select repositories for Agent PR
-              Firewall to monitor. Stage 0 starts the connection flow; Stage 1
-              completes webhook-backed sync.
+              Install the Agent PR Firewall GitHub App and select repositories
+              to monitor. OAuth signs you in; the App grants repository access.
             </CardDescription>
           </div>
         </div>
@@ -39,7 +42,7 @@ export function ConnectRepoCard() {
               1
             </span>
             <span>
-              Install the Agent PR Firewall GitHub App on your account or org.
+              Install the GitHub App on your account or organization.
             </span>
           </li>
           <li className="flex gap-3">
@@ -47,7 +50,7 @@ export function ConnectRepoCard() {
               2
             </span>
             <span>
-              Choose which repositories receive pull request analysis.
+              Choose which repositories should send pull request events.
             </span>
           </li>
           <li className="flex gap-3">
@@ -55,20 +58,23 @@ export function ConnectRepoCard() {
               3
             </span>
             <span>
-              When agents open or update PRs, analysis results appear here.
+              When agents open or update PRs, they appear in the dashboard.
             </span>
           </li>
         </ol>
 
         <div className="flex flex-wrap items-center gap-2 pt-1">
-          {configured && installUrl ? (
-            <Button render={<a href={installUrl} />}>
+          {configured ? (
+            <Button render={<a href="/api/github/install" />}>
               Install GitHub App
               <ArrowRight data-icon="inline-end" />
             </Button>
           ) : (
-            <Button render={<Link href="/dashboard/repositories" />}>
-              Begin repository connection
+            <Button
+              variant="outline"
+              render={<Link href="/dashboard/settings" />}
+            >
+              Configure GitHub App env
               <ArrowRight data-icon="inline-end" />
             </Button>
           )}
@@ -83,14 +89,30 @@ export function ConnectRepoCard() {
 
         {!configured ? (
           <p className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            GitHub App credentials are not configured yet. You can still open
-            the repositories page and complete setup when{" "}
+            Server needs{" "}
+            <code className="font-mono text-[11px] text-foreground">
+              GITHUB_APP_ID
+            </code>
+            ,{" "}
             <code className="font-mono text-[11px] text-foreground">
               GITHUB_APP_SLUG
-            </code>{" "}
-            and related env vars are available (Stage 1).
+            </code>
+            , and{" "}
+            <code className="font-mono text-[11px] text-foreground">
+              GITHUB_APP_PRIVATE_KEY_PATH
+            </code>
+            . See README for setup.
           </p>
-        ) : null}
+        ) : (
+          <div className="space-y-3 border-t border-border/60 pt-4">
+            <p className="text-xs text-muted-foreground">
+              Install flow uses a signed state so repositories are linked to
+              your account. If GitHub already shows the App installed but this
+              page is empty, sync below.
+            </p>
+            <SyncInstallationsButton />
+          </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -10,14 +10,15 @@ This is **not** a generic AI code reviewer. Its central question:
 
 ## Current stage
 
-**Stage 0 — Foundation**
+**Stage 1 — GitHub Integration**
 
-- Next.js (App Router) + TypeScript + Tailwind CSS
-- shadcn/ui design system
-- Supabase PostgreSQL schema + RLS
-- GitHub authentication (via Supabase Auth)
-- Protected dashboard shell
-- Repository connection entry points (GitHub App wiring in Stage 1)
+- Stage 0 foundation (auth, dashboard shell, design system)
+- GitHub App install + repository connection
+- Secure webhook ingestion with signature verification
+- Pull request persistence (open / synchronize / reopen / close)
+- Dashboard list + detail views for real PRs
+
+Analysis engines remain stubs until Stage 2+.
 
 ## Stack
 
@@ -27,23 +28,27 @@ This is **not** a generic AI code reviewer. Its central question:
 | UI | React, Tailwind, shadcn/ui, Lucide |
 | Auth | GitHub OAuth (Supabase Auth) |
 | Data | Supabase PostgreSQL |
-| Analysis | Modular engine (stubs in Stage 0) |
+| GitHub | GitHub App + Webhooks + Octokit |
+| Analysis | Modular engine (stubs until Stage 2) |
 
 ## Project structure
 
 ```text
 src/
-├── app/                 # Routes (landing, auth, dashboard, API)
-├── components/          # UI + layout (no domain business logic)
+├── app/
+│   ├── api/github/      # install, setup, webhooks
+│   ├── auth/            # OAuth callback
+│   └── dashboard/       # protected UI
+├── components/
 ├── lib/
-│   ├── auth/            # Session + OAuth actions
-│   ├── supabase/        # Clients + middleware helpers
-│   ├── github/          # GitHub integration (Stage 1+)
-│   └── analysis/        # Modular analysis engines
-├── services/            # Server-side domain services
-├── types/               # Domain + database types
-└── config/              # Site configuration
-supabase/migrations/     # SQL schema
+│   ├── auth/
+│   ├── supabase/        # user client + service-role admin
+│   ├── github/          # App auth, config, webhook verify
+│   └── analysis/        # Stage 2+ stubs
+├── services/            # installations, repos, PRs, events
+├── types/
+└── config/
+supabase/migrations/
 ```
 
 ## Setup
@@ -60,49 +65,120 @@ npm install
 cp .env.example .env.local
 ```
 
-Fill in:
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_APP_URL` | Yes | Public app origin (local or tunnel) |
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Browser/server user client |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Stage 1** | Webhook + setup writes (server only) |
+| `GITHUB_APP_ID` | **Stage 1** | GitHub App ID |
+| `GITHUB_APP_SLUG` | **Stage 1** | App slug for install URL |
+| `GITHUB_APP_PRIVATE_KEY` | **Stage 1** | App private key (`\n` escaped OK) |
+| `GITHUB_APP_WEBHOOK_SECRET` | **Stage 1** | HMAC signature verification |
+| `GITHUB_APP_CLIENT_ID` | Optional | App OAuth (not required for Stage 1) |
+| `GITHUB_APP_CLIENT_SECRET` | Optional | App OAuth (not required for Stage 1) |
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `NEXT_PUBLIC_APP_URL` (default `http://localhost:3000`)
-
-### 3. Supabase project
+### 3. Supabase
 
 1. Create a Supabase project.
-2. Run `supabase/migrations/001_initial_schema.sql` in the SQL editor.
-3. Enable **GitHub** under Authentication → Providers.
-4. Create a GitHub OAuth App (or use GitHub App OAuth credentials):
-   - Homepage: `http://localhost:3000`
-   - Authorization callback URL: `https://<project-ref>.supabase.co/auth/v1/callback`
-5. Copy Client ID / Secret into Supabase GitHub provider settings.
+2. Run migrations in the SQL editor **in order**:
+   - `supabase/migrations/001_initial_schema.sql`
+   - `supabase/migrations/002_stage1_github_integration.sql`
+3. Enable **GitHub** under Authentication → Providers (OAuth App for sign-in).
+4. Copy **Project URL**, **anon key**, and **service_role** key into `.env.local`.
 
-### 4. Run locally
+### 4. Create the GitHub App
+
+1. Open [GitHub → Settings → Developer settings → GitHub Apps](https://github.com/settings/apps) → **New GitHub App**.
+2. Fill in:
+
+| Field | Value |
+| --- | --- |
+| GitHub App name | e.g. `Agent PR Firewall` |
+| Homepage URL | `http://localhost:3000` (or your tunnel URL) |
+| Callback URL | `{APP_URL}/api/github/setup` |
+| Setup URL | `{APP_URL}/api/github/setup` |
+| **Redirect on update** | Enable |
+| Webhook URL | `{APP_URL}/api/github/webhooks` |
+| Webhook secret | Long random string → same as `GITHUB_APP_WEBHOOK_SECRET` |
+
+3. **Repository permissions** (minimum for Stage 1):
+
+| Permission | Access |
+| --- | --- |
+| Metadata | Read-only |
+| Contents | Read-only |
+| Pull requests | Read-only |
+
+4. **Subscribe to events**:
+
+- `Installation`
+- `Installation repositories`
+- `Pull request`
+
+5. Create the App, then:
+   - Note **App ID** → `GITHUB_APP_ID`
+   - Note **slug** from the public page URL (`github.com/apps/<slug>`) → `GITHUB_APP_SLUG`
+   - Generate a **private key** → paste into `GITHUB_APP_PRIVATE_KEY` (use `\n` for newlines in `.env.local`)
+
+### 5. Local webhooks (required for real PR events)
+
+GitHub cannot reach `localhost`. Use a tunnel:
+
+```bash
+# example with ngrok
+ngrok http 3000
+```
+
+Then set:
+
+```env
+NEXT_PUBLIC_APP_URL=https://YOUR_SUBDOMAIN.ngrok-free.app
+```
+
+Update the GitHub App **Homepage**, **Setup URL**, and **Webhook URL** to the same public origin.
+
+Restart `npm run dev` after env changes.
+
+### 6. Run the app
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open the app URL → sign in → **Repositories** → **Connect repository**.
 
-## Stage 0 acceptance criteria
+## End-to-end test checklist
 
-| Criterion | Status |
+1. Sign in with GitHub (Supabase OAuth).
+2. Click **Connect repository** → install the App on a test repo.
+3. Confirm you return to `/dashboard/repositories` with **Connected** status.
+4. Open a PR (or push to an existing PR branch) on that repo.
+5. Confirm the PR appears under **Pull requests** and on the overview.
+6. Open the PR detail page and verify metadata + ingestion history.
+7. Push another commit → PR updates in place (no duplicate row).
+
+### Manual webhook signature check
+
+- Valid signature → `200` / `202` JSON response
+- Invalid `X-Hub-Signature-256` → `401 Invalid signature`
+
+## Stage acceptance
+
+| Stage | Criteria |
 | --- | --- |
-| Open the application | Landing page |
-| Sign in with GitHub | `/login` + Supabase OAuth |
-| Access protected dashboard | Middleware + `/dashboard` |
-| See application shell | Sidebar, header, overview |
-| Begin connecting a repository | `/dashboard/repositories` flow |
+| **0** | Landing, GitHub sign-in, protected dashboard shell |
+| **1** | App install, connected repos, signed webhooks, PR list/detail |
 
-## Development stages (from REQUIREMENTS.md)
+## Development stages
 
-0. Foundation ← **current**
-1. GitHub Integration
-2. Deterministic Analysis
-3. Task-Scope Analysis
-4. Decision Engine
-5. Agent Feedback Loop
-6. Portfolio and Product Polish
+0. Foundation  
+1. GitHub Integration ← **current**  
+2. Deterministic Analysis  
+3. Task-Scope Analysis  
+4. Decision Engine  
+5. Agent Feedback Loop  
+6. Portfolio and Product Polish  
 
 ## Scripts
 
@@ -115,9 +191,11 @@ npm run lint     # ESLint
 
 ## Security
 
-- Request minimum GitHub OAuth scopes for sign-in (`read:user`, `user:email`).
-- Repository access is intended via GitHub App permissions (Stage 1), not broad OAuth repo scopes.
-- Secrets stay server-side; RLS enforces per-user data access.
+- User OAuth scopes are minimal (`read:user`, `user:email`).
+- Repository access is via GitHub App installation, not user PATs.
+- Webhooks are rejected without a valid HMAC signature.
+- `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET`, and `SUPABASE_SERVICE_ROLE_KEY` are server-only.
+- RLS still scopes user reads; webhooks write with the service role on the server.
 
 ## License
 

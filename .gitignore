@@ -40,6 +40,10 @@ yarn-error.log*
 # local product specification (not part of the public repo)
 REQUIREMENTS.md
 
+# GitHub App private keys and local secrets
+secrets/
+*.pem
+
 # vercel
 .vercel
 

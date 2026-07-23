@@ -9,11 +9,7 @@ export type Decision =
   | "REVIEW_REQUIRED"
   | "BLOCKED";
 
-export type RiskClassification =
-  | "LOW"
-  | "MEDIUM"
-  | "HIGH"
-  | "CRITICAL";
+export type RiskClassification = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
 export type ScopeClassification =
   | "HIGH_COMPLIANCE"
@@ -30,11 +26,15 @@ export type AnalysisStatus =
   | "failed"
   | "cancelled";
 
-export type PullRequestStatus =
-  | "open"
-  | "closed"
-  | "merged"
-  | "draft";
+export type PullRequestStatus = "open" | "closed" | "merged" | "draft";
+
+export type RepositoryConnectionStatus =
+  | "connected"
+  | "pending"
+  | "error"
+  | "disconnected";
+
+export type InstallationStatus = "active" | "suspended" | "deleted";
 
 export type TaskSourceType =
   | "issue_title"
@@ -47,6 +47,8 @@ export type RiskSeverity = "info" | "low" | "medium" | "high" | "critical";
 
 export type AnalysisEventType =
   | "pr_received"
+  | "pr_updated"
+  | "pr_closed"
   | "analysis_started"
   | "deterministic_completed"
   | "scope_completed"
@@ -69,6 +71,19 @@ export interface UserProfile {
   updatedAt: string;
 }
 
+export interface GitHubInstallation {
+  id: string;
+  installationId: number;
+  accountLogin: string;
+  accountType: string;
+  accountId: number;
+  status: InstallationStatus;
+  suspendedAt: string | null;
+  connectedByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Repository {
   id: string;
   githubRepositoryId: number;
@@ -77,8 +92,14 @@ export interface Repository {
   fullName: string;
   defaultBranch: string;
   installationId: string | null;
+  githubInstallationId: number | null;
   connectedByUserId: string;
   isActive: boolean;
+  connectionStatus: RepositoryConnectionStatus;
+  connectionError: string | null;
+  lastSyncedAt: string | null;
+  htmlUrl: string | null;
+  private: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -95,10 +116,23 @@ export interface PullRequest {
   sourceBranch: string;
   targetBranch: string;
   status: PullRequestStatus;
+  isDraft: boolean;
   headSha: string | null;
   htmlUrl: string | null;
+  mergedAt: string | null;
+  closedAt: string | null;
+  githubCreatedAt: string | null;
+  githubUpdatedAt: string | null;
+  lastEventAction: string | null;
+  lastIngestedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PullRequestListItem extends PullRequest {
+  repositoryFullName: string;
+  repositoryOwner: string;
+  repositoryName: string;
 }
 
 export interface Task {
@@ -154,7 +188,7 @@ export interface AnalysisEvent {
   id: string;
   analysisId: string | null;
   pullRequestId: string | null;
-  eventType: AnalysisEventType;
+  eventType: string;
   message: string | null;
   metadata: Record<string, unknown> | null;
   createdAt: string;
@@ -162,8 +196,14 @@ export interface AnalysisEvent {
 
 export interface OverviewStats {
   connectedRepositories: number;
+  ingestedPullRequests: number;
+  openPullRequests: number;
   analyzedPullRequests: number;
   lowRiskCount: number;
   reviewRequiredCount: number;
   blockedCount: number;
 }
+
+export type ServiceResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string; code?: string };
