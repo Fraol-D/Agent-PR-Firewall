@@ -1,3 +1,4 @@
+import { isDocumentationOnlyChange } from "@/lib/analysis/decision";
 import { ANALYSIS_LIMITS, redactSecretsInText } from "@/lib/analysis/filters";
 import type {
   AnalysisContext,
@@ -45,6 +46,11 @@ export function buildAnalysisContext(input: {
   if (deterministic.sensitiveAreas.length) {
     parts.push(
       `Sensitive areas (deterministic): ${deterministic.sensitiveAreas.join(", ")}`,
+    );
+  }
+  if (isDocumentationOnlyChange(deterministic)) {
+    parts.push(
+      `Change mode: DOCUMENTATION-ONLY (all changed files are documentation). Review docs quality, not application implementation.`,
     );
   }
   if (input.pullRequest.description?.trim()) {

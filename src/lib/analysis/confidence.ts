@@ -1,10 +1,11 @@
 import type {
   AnalysisContext,
+  ConfidenceReason,
   StructuredFinding,
 } from "@/lib/analysis/types";
 
 /**
- * Deterministic confidence calibration (Stage 2.5).
+ * Deterministic confidence calibration (Stage 2.5 / 2.6).
  *
  * Algorithm (applied per finding after AI returns a raw confidence):
  *
@@ -21,6 +22,7 @@ import type {
  *      sensitive area present in deterministic result): × 1.04 (then re-capped)
  * 4. Floor at 0.05 so UI never shows zero for a real finding.
  * 5. Final clamp to [0.05, 0.95].
+ * 6. Attach a human-readable confidence reason (Stage 2.6).
  */
 
 const WEAK_EVIDENCE =
@@ -101,8 +103,99 @@ export function calibrateFindings(
   context: AnalysisContext,
   analyzedFilePaths: Set<string>,
 ): StructuredFinding[] {
-  return findings.map((f) => ({
-    ...f,
-    confidence: calibrateFindingConfidence(f, context, analyzedFilePaths),
-  }));
+  return findings.map((f) => {
+    const confidence = calibrateFindingConfidence(
+      f,
+      context,
+      analyzedFilePaths,
+    );
+    return {
+      ...f,
+      confidence,
+      confidenceReason: buildConfidenceReason({
+        ...f,
+        confidence,
+      }),
+    };
+  });
+}
+
+/**
+ * Map calibrated confidence + observation flags to a short UX reason.
+ */
+export function buildConfidenceReason(
+  finding: Pick<
+    StructuredFinding,
+    "confidence" | "isInference" | "evidence" | "affectedFiles"
+  >,
+): ConfidenceReason {
+  const conf = finding.confidence ?? 0.55;
+  const evidence = (finding.evidence ?? "").trim();
+  const weak =
+    !evidence || WEAK_EVIDENCE.test(evidence) || evidence.length < 24;
+  const hasFiles = finding.affectedFiles.length > 0;
+  const observedStrong = !finding.isInference && !weak && hasFiles;
+
+  if (finding.isInference) {
+    if (conf < 0.45 || weak) {
+      return { level: "low", label: "Limited evidence available." };
+    }
+    return {
+      level: "medium",
+      label: "Inference from surrounding implementation.",
+    };
+  }
+
+  if (observedStrong && conf >= 0.72) {
+    return {
+      level: "high",
+      label: "Directly observed in modified code.",
+    };
+  }
+
+  if (conf >= 0.45 && (hasFiles || !weak)) {
+    return {
+      level: "medium",
+      label: observedStrong
+        ? "Supported by file evidence with moderate certainty."
+        : "Inference from surrounding implementation.",
+    };
+  }
+
+  return { level: "low", label: "Limited evidence available." };
+}
+
+/** Overall analysis confidence reason from aggregate score. */
+export function buildOverallConfidenceReason(
+  confidence: number | null,
+  opts?: { docsOnly?: boolean; findingCount?: number },
+): ConfidenceReason {
+  if (confidence == null) {
+    return {
+      level: "medium",
+      label: "Confidence not available for this analysis.",
+    };
+  }
+  if (opts?.docsOnly) {
+    return {
+      level: confidence >= 0.7 ? "high" : "medium",
+      label: "Documentation-only change with deterministic file classification.",
+    };
+  }
+  if (confidence >= 0.75) {
+    return {
+      level: "high",
+      label: "Directly observed in modified code.",
+    };
+  }
+  if (confidence >= 0.5) {
+    return {
+      level: "medium",
+      label: "Inference from surrounding implementation.",
+    };
+  }
+  return {
+    level: "low",
+    label: "Limited evidence available.",
+  };
 }

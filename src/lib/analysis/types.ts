@@ -14,6 +14,36 @@ export type OverallAnalysisStatus =
   | "review_recommended"
   | "high_risk_concerns";
 
+/** Human-facing merge recommendation (Stage 2.6). Maps to OverallAnalysisStatus for storage. */
+export type MergeDecision =
+  | "safe_to_merge"
+  | "review_recommended"
+  | "block_merge";
+
+export type DecisionTraceTone = "positive" | "warning" | "negative" | "neutral";
+
+export interface DecisionTraceItem {
+  id: string;
+  tone: DecisionTraceTone;
+  label: string;
+}
+
+export type ConfidenceLevel = "high" | "medium" | "low";
+
+export interface ConfidenceReason {
+  level: ConfidenceLevel;
+  label: string;
+}
+
+/** Structured evidence for UI — derived from free-form evidence + paths. */
+export interface StructuredEvidence {
+  file: string | null;
+  lines: string | null;
+  observedChange: string;
+  supportsFinding: string;
+  raw: string | null;
+}
+
 export type FileCategory =
   | "frontend"
   | "backend"
@@ -112,6 +142,10 @@ export interface StructuredFinding {
   affectedFiles: string[];
   confidence: number | null;
   isInference: boolean;
+  /** Stage 2.6 — optional; computed during calibration or when loading detail. */
+  confidenceReason?: ConfidenceReason | null;
+  /** Stage 2.6 — optional structured view of evidence string. */
+  structuredEvidence?: StructuredEvidence | null;
 }
 
 export interface AiAnalysisResult {
@@ -172,4 +206,12 @@ export interface AnalysisDetail extends AnalysisRecord {
   changedFiles: ChangedFileEvidence[];
   deterministicResult: DeterministicAnalysisResult | null;
   severityBreakdown: Record<FindingSeverity, number>;
+  /** Stage 2.6 trust UX fields (computed; backward compatible). */
+  decision: MergeDecision;
+  primaryReason: string;
+  decisionTrace: DecisionTraceItem[];
+  overallConfidence: number | null;
+  overallConfidenceReason: ConfidenceReason | null;
+  riskBreakdown: Record<string, number>;
+  docsOnly: boolean;
 }

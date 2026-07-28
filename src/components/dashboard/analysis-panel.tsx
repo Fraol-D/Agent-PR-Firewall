@@ -1,13 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
+  ChevronDown,
+  Circle,
+  FileText,
   Loader2,
   Play,
   RefreshCw,
   ShieldAlert,
+  ShieldCheck,
+  ShieldX,
+  XCircle,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -19,11 +33,32 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ensureNotificationPermission,
+  notifyAnalysisComplete,
+} from "@/lib/analysis/client-notify";
+import {
+  evidenceNeedsCollapse,
+  structureFindingEvidence,
+} from "@/lib/analysis/evidence";
+import {
+  mergeDecisionLabel,
+  overallToMergeDecision,
+} from "@/lib/analysis/decision";
+import {
+  buildConfidenceReason,
+  buildOverallConfidenceReason,
+} from "@/lib/analysis/confidence";
 import type {
   AnalysisDetail,
+  AnalysisFindingRecord,
   AnalysisJobStatus,
+  ConfidenceReason,
+  DecisionTraceItem,
   FindingSeverity,
-  OverallAnalysisStatus,
+  MergeDecision,
+  StructuredEvidence,
 } from "@/lib/analysis/types";
 import { cn } from "@/lib/utils";
 
@@ -46,8 +81,29 @@ const severityStyles: Record<FindingSeverity, string> = {
   high: "bg-risk-required/25 text-risk-required-foreground border-transparent",
   medium: "bg-risk-review/25 text-risk-review-foreground border-transparent",
   low: "bg-risk-low/20 text-risk-low-foreground border-transparent",
-  info: "bg-muted text-muted-foreground border-transparent",
+  info: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-transparent",
 };
+
+const PROGRESS_STEPS = [
+  { id: "collect", label: "Collecting PR files" },
+  { id: "filter", label: "Filtering context" },
+  { id: "prompt", label: "Preparing prompt" },
+  { id: "ai", label: "Running AI analysis" },
+  { id: "validate", label: "Validating output" },
+  { id: "save", label: "Saving analysis" },
+  { id: "done", label: "Completed" },
+] as const;
+
+const RISK_STRIP_ORDER = [
+  "SECURITY",
+  "RELIABILITY",
+  "PERFORMANCE",
+  "MAINTAINABILITY",
+  "AUTHENTICATION",
+  "CONFIGURATION",
+  "DATABASE",
+  "API",
+] as const;
 
 function statusLabel(status: AnalysisJobStatus | "not_started"): string {
   switch (status) {
@@ -66,17 +122,46 @@ function statusLabel(status: AnalysisJobStatus | "not_started"): string {
   }
 }
 
-function overallLabel(status: OverallAnalysisStatus | null): string {
-  switch (status) {
-    case "no_significant_concerns":
-      return "No significant concerns detected";
+function decisionVisual(decision: MergeDecision): {
+  icon: typeof ShieldCheck;
+  shell: string;
+  badge: string;
+  label: string;
+} {
+  switch (decision) {
+    case "safe_to_merge":
+      return {
+        icon: ShieldCheck,
+        shell:
+          "border-risk-low/40 bg-risk-low/10 text-risk-low-foreground dark:bg-risk-low/15",
+        badge: "bg-risk-low/25 text-risk-low-foreground border-transparent",
+        label: mergeDecisionLabel(decision),
+      };
     case "review_recommended":
-      return "Review recommended";
-    case "high_risk_concerns":
-      return "High-risk concerns detected";
-    default:
-      return "—";
+      return {
+        icon: ShieldAlert,
+        shell:
+          "border-risk-review/40 bg-risk-review/10 text-risk-review-foreground",
+        badge:
+          "bg-risk-review/25 text-risk-review-foreground border-transparent",
+        label: mergeDecisionLabel(decision),
+      };
+    case "block_merge":
+      return {
+        icon: ShieldX,
+        shell:
+          "border-risk-blocked/40 bg-risk-blocked/10 text-risk-blocked-foreground",
+        badge:
+          "bg-risk-blocked/25 text-risk-blocked-foreground border-transparent",
+        label: mergeDecisionLabel(decision),
+      };
   }
+}
+
+function shortModelName(model: string | null | undefined): string {
+  if (!model) return "—";
+  const last = model.split("/").pop() ?? model;
+  return last.replace(/:free$/i, "");
 }
 
 export function AnalysisPanel({
@@ -89,32 +174,61 @@ export function AnalysisPanel({
   );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [progressIndex, setProgressIndex] = useState(0);
+  const [progressFailed, setProgressFailed] = useState(false);
+  const userTriggeredRef = useRef(false);
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const effectiveStatus: AnalysisJobStatus | "not_started" =
     analysis?.status ?? "not_started";
 
   const isActive =
-    effectiveStatus === "pending" || effectiveStatus === "running";
+    busy ||
+    effectiveStatus === "pending" ||
+    effectiveStatus === "running";
 
-  const refreshAnalysis = useCallback(
-    async (analysisId: string) => {
-      const res = await fetch(`/api/analysis/${analysisId}`);
-      const body = (await res.json()) as {
-        error?: string;
-        analysis?: AnalysisDetail;
-      };
-      if (!res.ok) {
-        throw new Error(body.error ?? "Failed to load analysis");
+  const clearProgressTimer = useCallback(() => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+  }, []);
+
+  const startProgressSimulation = useCallback(() => {
+    clearProgressTimer();
+    setProgressIndex(0);
+    setProgressFailed(false);
+    let step = 0;
+    progressTimerRef.current = setInterval(() => {
+      step += 1;
+      // Advance through steps except final "Completed" until real finish
+      setProgressIndex((prev) =>
+        Math.min(prev + 1, PROGRESS_STEPS.length - 2),
+      );
+      if (step > 40) {
+        clearProgressTimer();
       }
-      if (body.analysis) {
-        setAnalysis(body.analysis);
-      }
-    },
-    [],
-  );
+    }, 2200);
+  }, [clearProgressTimer]);
+
+  const refreshAnalysis = useCallback(async (analysisId: string) => {
+    const res = await fetch(`/api/analysis/${analysisId}`);
+    const body = (await res.json()) as {
+      error?: string;
+      analysis?: AnalysisDetail;
+    };
+    if (!res.ok) {
+      throw new Error(body.error ?? "Failed to load analysis");
+    }
+    if (body.analysis) {
+      setAnalysis(body.analysis);
+    }
+    return body.analysis ?? null;
+  }, []);
 
   useEffect(() => {
-    if (!analysis || !isActive) return;
+    if (!analysis || (!isActive && !busy)) return;
+    if (busy) return; // start request owns the cycle when busy
     const id = analysis.id;
     const timer = setInterval(() => {
       void refreshAnalysis(id).catch(() => {
@@ -122,11 +236,19 @@ export function AnalysisPanel({
       });
     }, 2000);
     return () => clearInterval(timer);
-  }, [analysis, isActive, refreshAnalysis]);
+  }, [analysis, isActive, busy, refreshAnalysis]);
+
+  useEffect(() => () => clearProgressTimer(), [clearProgressTimer]);
 
   async function startAnalysis(force: boolean) {
     setBusy(true);
     setError(null);
+    userTriggeredRef.current = true;
+    startProgressSimulation();
+
+    // Request notification permission once (user gesture path).
+    void ensureNotificationPermission();
+
     try {
       const res = await fetch("/api/analysis/start", {
         method: "POST",
@@ -142,16 +264,54 @@ export function AnalysisPanel({
         throw new Error(body.error ?? "Failed to start analysis");
       }
       if (body.analysisId) {
-        await refreshAnalysis(body.analysisId);
+        const detail = await refreshAnalysis(body.analysisId);
+        clearProgressTimer();
+        if (detail?.status === "failed") {
+          setProgressFailed(true);
+          setProgressIndex((i) => Math.min(i, PROGRESS_STEPS.length - 2));
+        } else {
+          setProgressIndex(PROGRESS_STEPS.length - 1);
+          if (userTriggeredRef.current && detail?.status === "completed") {
+            // Defer so paint isn't delayed
+            queueMicrotask(() => notifyAnalysisComplete());
+          }
+        }
       }
     } catch (err) {
+      clearProgressTimer();
+      setProgressFailed(true);
       setError(err instanceof Error ? err.message : "Failed to start analysis");
     } finally {
       setBusy(false);
+      userTriggeredRef.current = false;
     }
   }
 
-  const findingCount = analysis?.findings.length ?? 0;
+  const decision: MergeDecision = useMemo(() => {
+    if (analysis?.decision) return analysis.decision;
+    return overallToMergeDecision(analysis?.overallStatus ?? null);
+  }, [analysis]);
+
+  const decisionMeta = decisionVisual(decision);
+
+  const primaryReason =
+    analysis?.primaryReason ??
+    (analysis?.summary
+      ? analysis.summary.slice(0, 160)
+      : "Run an analysis to produce a merge recommendation.");
+
+  const overallConfidence = analysis?.overallConfidence ?? null;
+  const overallConfidenceReason: ConfidenceReason | null =
+    analysis?.overallConfidenceReason ??
+    (overallConfidence != null
+      ? buildOverallConfidenceReason(overallConfidence, {
+          docsOnly: analysis?.docsOnly,
+        })
+      : null);
+
+  const decisionTrace: DecisionTraceItem[] = analysis?.decisionTrace ?? [];
+
+  const riskBreakdown = analysis?.riskBreakdown ?? {};
 
   const severityChips = useMemo(() => {
     if (!analysis) return [];
@@ -163,6 +323,22 @@ export function AnalysisPanel({
       }));
   }, [analysis]);
 
+  const metadataChips = useMemo(() => {
+    if (!analysis || analysis.status !== "completed") return [];
+    return [
+      analysis.provider ? titleCase(analysis.provider) : null,
+      analysis.model ? shortModelName(analysis.model) : null,
+      analysis.filesChanged != null
+        ? `${analysis.filesChanged} files analyzed`
+        : null,
+      analysis.durationMs != null
+        ? `Duration ${formatDuration(analysis.durationMs)}`
+        : null,
+      `Version ${analysis.analysisVersion}`,
+      analysis.headSha ? `Commit ${analysis.headSha.slice(0, 7)}` : null,
+    ].filter(Boolean) as string[];
+  }, [analysis]);
+
   return (
     <Card className="border-border/80 bg-card/80 shadow-none">
       <CardHeader className="space-y-3">
@@ -170,8 +346,8 @@ export function AnalysisPanel({
           <div>
             <CardTitle className="text-base">Pull request analysis</CardTitle>
             <CardDescription className="mt-1">
-              Deterministic change collection plus AI-assisted structured
-              findings. Not an approval or block decision.
+              Deterministic change collection plus AI-assisted findings with a
+              clear merge recommendation.
             </CardDescription>
           </div>
           <Badge variant="outline">{statusLabel(effectiveStatus)}</Badge>
@@ -187,8 +363,11 @@ export function AnalysisPanel({
         ) : null}
 
         {analysis?.isOutdated ? (
-          <div className="flex gap-2 rounded-lg border border-risk-review/40 bg-risk-review/10 px-3 py-2 text-sm text-risk-review-foreground">
-            <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+          <div
+            role="status"
+            className="flex gap-2 rounded-lg border border-risk-review/40 bg-risk-review/10 px-3 py-2 text-sm text-risk-review-foreground"
+          >
+            <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
             <p>
               This analysis is outdated. The pull request has new commits since
               SHA {analysis.headSha?.slice(0, 7)}. Run a new analysis for the
@@ -198,8 +377,11 @@ export function AnalysisPanel({
         ) : null}
 
         {error ? (
-          <div className="flex gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <div
+            role="alert"
+            className="flex gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
             <p>{error}</p>
           </div>
         ) : null}
@@ -211,7 +393,11 @@ export function AnalysisPanel({
             <Button
               disabled={busy || isActive}
               onClick={() => {
-                void startAnalysis(Boolean(analysis?.isOutdated || forceNeeded(effectiveStatus)));
+                void startAnalysis(
+                  Boolean(
+                    analysis?.isOutdated || forceNeeded(effectiveStatus),
+                  ),
+                );
               }}
             >
               {busy || isActive ? (
@@ -235,71 +421,231 @@ export function AnalysisPanel({
                 void startAnalysis(true);
               }}
             >
-              <RefreshCw data-icon="inline-start" />
+              {busy ? (
+                <Loader2 data-icon="inline-start" className="animate-spin" />
+              ) : (
+                <RefreshCw data-icon="inline-start" />
+              )}
               Re-analyze this commit
             </Button>
           ) : null}
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4">
-        {effectiveStatus === "not_started" ? (
+      <CardContent className="space-y-5">
+        {effectiveStatus === "not_started" && !busy ? (
           <EmptyState
+            icon={<FileText className="size-8 text-muted-foreground/70" />}
             title="This pull request has not been analyzed yet"
-            body="Start an analysis to collect changed files, classify them, and generate structured review findings."
+            body="Start an analysis to collect changed files, classify them, and produce a merge recommendation with structured findings."
           />
         ) : null}
 
-        {isActive ? (
-          <div className="flex items-center gap-3 rounded-xl border border-border/70 bg-muted/20 px-4 py-6">
-            <Loader2 className="size-5 animate-spin text-brand" />
-            <div>
-              <p className="text-sm font-medium">
-                {effectiveStatus === "pending"
-                  ? "Analysis queued"
-                  : "Analysis in progress"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Collecting diffs, classifying files, and running AI reasoning.
-                Results are not final until status is Completed.
-              </p>
-            </div>
-          </div>
+        {(busy ||
+          effectiveStatus === "pending" ||
+          effectiveStatus === "running") &&
+        effectiveStatus !== "completed" ? (
+          <ProgressPanel
+            activeIndex={progressIndex}
+            failed={progressFailed}
+          />
         ) : null}
 
-        {effectiveStatus === "failed" ? (
-          <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-4">
-            <p className="text-sm font-medium text-destructive">Analysis failed</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {analysis?.errorMessage ??
-                "The analysis could not be completed. You can retry."}
-            </p>
+        {effectiveStatus === "failed" && !busy ? (
+          <div
+            role="alert"
+            className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-4"
+          >
+            <div className="flex items-start gap-2">
+              <XCircle
+                className="mt-0.5 size-4 shrink-0 text-destructive"
+                aria-hidden
+              />
+              <div>
+                <p className="text-sm font-medium text-destructive">
+                  Analysis failed
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {analysis?.errorMessage ??
+                    "The analysis could not be completed. You can retry."}
+                </p>
+              </div>
+            </div>
+            {progressFailed ? (
+              <div className="mt-4">
+                <ProgressPanel
+                  activeIndex={progressIndex}
+                  failed
+                />
+              </div>
+            ) : null}
           </div>
         ) : null}
 
         {effectiveStatus === "completed" && analysis ? (
-          <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Stat
-                label="Overall"
-                value={overallLabel(analysis.overallStatus)}
+          <div className="space-y-5">
+            {/* Decision card */}
+            <section
+              aria-label="Merge decision"
+              className={cn(
+                "rounded-xl border p-4 transition-colors",
+                decisionMeta.shell,
+              )}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <decisionMeta.icon
+                    className="mt-0.5 size-6 shrink-0"
+                    aria-hidden
+                  />
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] opacity-80">
+                      Decision
+                    </p>
+                    <p className="mt-0.5 text-lg font-semibold tracking-tight">
+                      {decisionMeta.label}
+                    </p>
+                    <p className="mt-1 max-w-2xl text-sm leading-relaxed opacity-90">
+                      {primaryReason}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-1 text-right">
+                  <Badge
+                    variant="outline"
+                    className={cn(decisionMeta.badge)}
+                  >
+                    {decisionMeta.label}
+                  </Badge>
+                  {overallConfidence != null ? (
+                    <p className="font-mono text-xs opacity-90">
+                      Confidence {(overallConfidence * 100).toFixed(0)}%
+                      {overallConfidenceReason
+                        ? ` · ${titleCase(overallConfidenceReason.level)}`
+                        : ""}
+                    </p>
+                  ) : null}
+                  {overallConfidenceReason ? (
+                    <p className="max-w-[16rem] text-[11px] leading-snug opacity-80">
+                      {overallConfidenceReason.label}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+
+            {/* Decision trace */}
+            {decisionTrace.length > 0 ? (
+              <section aria-label="Decision trace" className="space-y-2">
+                <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  Decision trace
+                </h3>
+                <ul className="grid gap-1.5 sm:grid-cols-2">
+                  {decisionTrace.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex items-start gap-2 rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-xs"
+                    >
+                      <TraceIcon tone={item.tone} />
+                      <span className="leading-snug">{item.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
+            {/* Risk breakdown */}
+            <section aria-label="Risk breakdown">
+              <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Risk breakdown
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {RISK_STRIP_ORDER.map((key) => {
+                  const count = riskBreakdown[key] ?? 0;
+                  return (
+                    <div
+                      key={key}
+                      className={cn(
+                        "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs",
+                        count > 0
+                          ? "border-border/80 bg-background/60"
+                          : "border-border/40 bg-muted/20 text-muted-foreground",
+                      )}
+                    >
+                      <span className="font-medium tracking-wide">
+                        {titleCase(key.toLowerCase())}
+                      </span>
+                      <span
+                        className={cn(
+                          "font-mono tabular-nums",
+                          count > 0 ? "text-foreground" : "text-muted-foreground",
+                        )}
+                      >
+                        {count}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* Compact summary meta */}
+            <section
+              aria-label="Analysis summary"
+              className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+            >
+              <MetaStat label="Reason" value={primaryReason} />
+              <MetaStat
+                label="Files analyzed"
+                value={String(analysis.filesChanged ?? 0)}
               />
-              <Stat
-                label="Findings"
-                value={String(findingCount)}
-              />
-              <Stat
-                label="Change size"
-                value={`${analysis.filesChanged ?? 0} files · +${analysis.linesAdded ?? 0}/-${analysis.linesDeleted ?? 0}`}
-              />
-              <Stat
+              <MetaStat
                 label="Duration"
                 value={formatDuration(analysis.durationMs)}
               />
-            </div>
+              <MetaStat
+                label="Provider"
+                value={
+                  analysis.provider
+                    ? `${titleCase(analysis.provider)}${
+                        analysis.model
+                          ? ` · ${shortModelName(analysis.model)}`
+                          : ""
+                      }`
+                    : "—"
+                }
+              />
+              <MetaStat
+                label="Commit SHA"
+                value={
+                  analysis.headSha
+                    ? analysis.headSha.slice(0, 12)
+                    : "—"
+                }
+                mono
+              />
+              <MetaStat
+                label="Findings"
+                value={String(analysis.findings.length)}
+              />
+            </section>
+
+            {metadataChips.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5" aria-label="Metadata">
+                {metadataChips.map((chip) => (
+                  <Badge
+                    key={chip}
+                    variant="secondary"
+                    className="font-normal text-[11px]"
+                  >
+                    {chip}
+                  </Badge>
+                ))}
+              </div>
+            ) : null}
 
             {severityChips.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2" aria-label="Severity counts">
                 {severityChips.map((chip) => (
                   <Badge
                     key={chip.severity}
@@ -312,18 +658,9 @@ export function AnalysisPanel({
               </div>
             ) : null}
 
-            {analysis.summary ? (
-              <div className="rounded-xl border border-border/70 bg-background/40 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  Summary
-                </p>
-                <p className="mt-2 text-sm leading-relaxed">{analysis.summary}</p>
-                {analysis.provider ? (
-                  <p className="mt-2 font-mono text-[10px] text-muted-foreground">
-                    {analysis.provider}
-                    {analysis.model ? ` · ${analysis.model}` : ""}
-                  </p>
-                ) : null}
+            {analysis.docsOnly ? (
+              <div className="rounded-lg border border-sky-500/25 bg-sky-500/10 px-3 py-2 text-xs text-sky-900 dark:text-sky-100">
+                This pull request modifies documentation only.
               </div>
             ) : null}
 
@@ -342,86 +679,39 @@ export function AnalysisPanel({
               </div>
             ) : null}
 
-            <div className="space-y-3">
+            {/* Findings */}
+            <section className="space-y-3" aria-label="Findings">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="size-4 text-brand" />
+                <CheckCircle2 className="size-4 text-brand" aria-hidden />
                 <h3 className="text-sm font-semibold">Findings</h3>
+                <span className="text-xs text-muted-foreground">
+                  {analysis.findings.length}
+                </span>
               </div>
               {analysis.findings.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No structured findings were returned for this analysis.
-                </p>
+                <EmptyState
+                  icon={
+                    <CheckCircle2 className="size-8 text-risk-low" aria-hidden />
+                  }
+                  title="No findings"
+                  body="The analysis completed without structured findings for this change set."
+                />
               ) : (
                 analysis.findings.map((finding) => (
-                  <div
-                    key={finding.id}
-                    className="space-y-2 rounded-xl border border-border/70 bg-background/40 p-4"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge
-                        variant="outline"
-                        className={cn(severityStyles[finding.severity])}
-                      >
-                        {finding.severity}
-                      </Badge>
-                      <Badge variant="outline">{finding.category}</Badge>
-                      {finding.confidence != null ? (
-                        <span className="font-mono text-[10px] text-muted-foreground">
-                          confidence {(finding.confidence * 100).toFixed(0)}%
-                        </span>
-                      ) : null}
-                      {finding.isInference ? (
-                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                          Inference
-                        </span>
-                      ) : (
-                        <span className="text-[10px] uppercase tracking-wide text-risk-low">
-                          Observed
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm font-semibold">{finding.title}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {finding.summary}
-                    </p>
-                    <p className="text-sm leading-relaxed">
-                      {finding.explanation}
-                    </p>
-                    {finding.evidence ? (
-                      <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Evidence
-                        </p>
-                        <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed">
-                          {finding.evidence}
-                        </p>
-                      </div>
-                    ) : null}
-                    {finding.affectedFiles.length > 0 ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {finding.affectedFiles.map((file) => (
-                          <code
-                            key={file}
-                            className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]"
-                          >
-                            {file}
-                          </code>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
+                  <FindingCard key={finding.id} finding={finding} />
                 ))
               )}
-            </div>
+            </section>
 
+            {/* Changed files */}
             {analysis.changedFiles.length > 0 ? (
-              <div className="space-y-2">
+              <section className="space-y-2" aria-label="Changed files">
                 <h3 className="text-sm font-semibold">Changed files</h3>
                 <div className="max-h-64 space-y-1 overflow-y-auto rounded-xl border border-border/70 p-2">
                   {analysis.changedFiles.map((file) => (
                     <div
                       key={`${file.path}-${file.status}`}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-muted/30"
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors hover:bg-muted/30"
                     >
                       <div className="min-w-0">
                         <p className="truncate font-mono">{file.path}</p>
@@ -438,8 +728,20 @@ export function AnalysisPanel({
                     </div>
                   ))}
                 </div>
-              </div>
+              </section>
+            ) : analysis.status === "completed" ? (
+              <EmptyState
+                title="No changed files recorded"
+                body="This analysis has no stored changed-file list."
+              />
             ) : null}
+          </div>
+        ) : null}
+
+        {busy && effectiveStatus === "not_started" ? (
+          <div className="space-y-2" aria-hidden>
+            <Skeleton className="h-24 w-full rounded-xl" />
+            <Skeleton className="h-16 w-full rounded-xl" />
           </div>
         ) : null}
       </CardContent>
@@ -447,13 +749,248 @@ export function AnalysisPanel({
   );
 }
 
+function FindingCard({ finding }: { finding: AnalysisFindingRecord }) {
+  const [expanded, setExpanded] = useState(false);
+  const evidence: StructuredEvidence =
+    finding.structuredEvidence ?? structureFindingEvidence(finding);
+  const confidenceReason: ConfidenceReason =
+    finding.confidenceReason ?? buildConfidenceReason(finding);
+  const longExplanation = (finding.explanation?.length ?? 0) > 220;
+  const showFullEvidence = evidenceNeedsCollapse(evidence);
+
+  return (
+    <article className="space-y-2 rounded-xl border border-border/70 bg-background/40 p-4 transition-shadow hover:shadow-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge
+          variant="outline"
+          className={cn(severityStyles[finding.severity])}
+        >
+          {finding.severity}
+        </Badge>
+        <Badge variant="outline">{finding.category}</Badge>
+        {finding.confidence != null ? (
+          <span className="font-mono text-[10px] text-muted-foreground">
+            {(finding.confidence * 100).toFixed(0)}% ·{" "}
+            {titleCase(confidenceReason.level)}
+          </span>
+        ) : null}
+        {finding.isInference ? (
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Inference
+          </span>
+        ) : (
+          <span className="text-[10px] uppercase tracking-wide text-risk-low">
+            Observed
+          </span>
+        )}
+      </div>
+
+      <h4 className="text-sm font-semibold leading-snug">{finding.title}</h4>
+      <p className="text-sm text-muted-foreground">{finding.summary}</p>
+
+      <p className="text-sm leading-relaxed">
+        {expanded || !longExplanation
+          ? finding.explanation
+          : `${finding.explanation.slice(0, 220).trimEnd()}…`}
+      </p>
+
+      <div className="rounded-lg border border-border/60 bg-muted/15 p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Evidence
+        </p>
+        <dl className="mt-2 space-y-1.5 text-xs">
+          <div className="grid grid-cols-[5.5rem_1fr] gap-2">
+            <dt className="text-muted-foreground">File</dt>
+            <dd className="min-w-0 truncate font-mono">
+              {evidence.file ?? "—"}
+            </dd>
+          </div>
+          {evidence.lines ? (
+            <div className="grid grid-cols-[5.5rem_1fr] gap-2">
+              <dt className="text-muted-foreground">Lines</dt>
+              <dd className="font-mono">{evidence.lines}</dd>
+            </div>
+          ) : null}
+          <div className="grid grid-cols-[5.5rem_1fr] gap-2">
+            <dt className="text-muted-foreground">Observed</dt>
+            <dd className="leading-relaxed">
+              {expanded || !showFullEvidence
+                ? evidence.observedChange
+                : `${evidence.observedChange.slice(0, 160).trimEnd()}…`}
+            </dd>
+          </div>
+          <div className="grid grid-cols-[5.5rem_1fr] gap-2">
+            <dt className="text-muted-foreground">Supports</dt>
+            <dd className="leading-relaxed">{evidence.supportsFinding}</dd>
+          </div>
+        </dl>
+        {expanded && evidence.raw && evidence.raw !== evidence.observedChange ? (
+          <p className="mt-2 whitespace-pre-wrap border-t border-border/50 pt-2 text-[11px] leading-relaxed text-muted-foreground">
+            {evidence.raw}
+          </p>
+        ) : null}
+      </div>
+
+      <p className="text-[11px] text-muted-foreground">
+        Confidence reason: {confidenceReason.label}
+      </p>
+
+      {finding.affectedFiles.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {finding.affectedFiles.map((file) => (
+            <code
+              key={file}
+              className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]"
+            >
+              {file}
+            </code>
+          ))}
+        </div>
+      ) : null}
+
+      {longExplanation || showFullEvidence ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((v) => !v)}
+        >
+          <ChevronDown
+            className={cn(
+              "size-3.5 transition-transform",
+              expanded && "rotate-180",
+            )}
+            aria-hidden
+          />
+          {expanded ? "Show less" : "View more"}
+        </Button>
+      ) : null}
+    </article>
+  );
+}
+
+function ProgressPanel({
+  activeIndex,
+  failed,
+}: {
+  activeIndex: number;
+  failed?: boolean;
+}) {
+  return (
+    <div
+      className="rounded-xl border border-border/70 bg-muted/15 px-4 py-4"
+      role="status"
+      aria-live="polite"
+      aria-label="Analysis progress"
+    >
+      <p className="mb-3 text-sm font-medium">
+        {failed ? "Analysis stopped" : "Analysis in progress"}
+      </p>
+      <ol className="space-y-2">
+        {PROGRESS_STEPS.map((step, index) => {
+          const done = !failed && index < activeIndex;
+          const current = index === activeIndex;
+          const isFailedStep = Boolean(failed && current);
+          const pending = index > activeIndex;
+
+          return (
+            <li
+              key={step.id}
+              className={cn(
+                "flex items-center gap-2 text-sm transition-opacity",
+                pending && !isFailedStep ? "opacity-50" : "opacity-100",
+              )}
+            >
+              {done ? (
+                <Check
+                  className="size-4 text-risk-low"
+                  aria-label="Completed"
+                />
+              ) : isFailedStep ? (
+                <XCircle
+                  className="size-4 text-destructive"
+                  aria-label="Failed"
+                />
+              ) : current ? (
+                <Loader2
+                  className="size-4 animate-spin text-brand"
+                  aria-label="Current step"
+                />
+              ) : (
+                <Circle className="size-3.5 text-muted-foreground" aria-hidden />
+              )}
+              <span
+                className={cn(
+                  isFailedStep && "font-medium text-destructive",
+                  current && !failed && "font-medium",
+                  done && "text-muted-foreground",
+                )}
+              >
+                {step.label}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
+function TraceIcon({ tone }: { tone: DecisionTraceItem["tone"] }) {
+  if (tone === "positive") {
+    return (
+      <Check
+        className="mt-0.5 size-3.5 shrink-0 text-risk-low"
+        aria-label="Positive"
+      />
+    );
+  }
+  if (tone === "warning") {
+    return (
+      <AlertTriangle
+        className="mt-0.5 size-3.5 shrink-0 text-risk-review-foreground"
+        aria-label="Warning"
+      />
+    );
+  }
+  if (tone === "negative") {
+    return (
+      <XCircle
+        className="mt-0.5 size-3.5 shrink-0 text-destructive"
+        aria-label="Negative"
+      />
+    );
+  }
+  return (
+    <Circle
+      className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+      aria-label="Neutral"
+    />
+  );
+}
+
 function forceNeeded(status: AnalysisJobStatus | "not_started"): boolean {
   return status === "failed";
 }
 
-function EmptyState({ title, body }: { title: string; body: string }) {
+function EmptyState({
+  title,
+  body,
+  icon,
+}: {
+  title: string;
+  body: string;
+  icon?: ReactNode;
+}) {
   return (
     <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
+      {icon ? (
+        <div className="mb-3 flex justify-center" aria-hidden>
+          {icon}
+        </div>
+      ) : null}
       <p className="text-sm font-medium">{title}</p>
       <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-muted-foreground">
         {body}
@@ -462,13 +999,28 @@ function EmptyState({ title, body }: { title: string; body: string }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function MetaStat({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
   return (
     <div className="rounded-xl border border-border/70 bg-background/40 p-3">
       <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </p>
-      <p className="mt-1 text-sm font-medium leading-snug">{value}</p>
+      <p
+        className={cn(
+          "mt-1 text-sm font-medium leading-snug",
+          mono && "font-mono text-xs",
+        )}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -481,4 +1033,10 @@ function formatDuration(ms: number | null | undefined): string {
   const minutes = Math.floor(seconds / 60);
   const rem = seconds % 60;
   return `${minutes}m ${rem.toFixed(0)}s`;
+}
+
+function titleCase(value: string): string {
+  return value
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }

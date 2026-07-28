@@ -96,6 +96,23 @@ This roadmap aligns with `REQUIREMENTS.md` stages and what is actually in the co
 
 ---
 
+### Stage 2.6 — UX & Trust Hardening
+
+**Why:** Make analysis results scannable and trustworthy without new product engines.
+
+**Includes:**
+
+- Deterministic merge decision (Safe / Review / Block) + decision trace  
+- Structured evidence, risk breakdown, metadata chips  
+- Confidence reasons (High / Medium / Low)  
+- Documentation-only prompt and summary handling  
+- Live progress steps, browser notification + soft completion sound  
+- Collapsible findings and improved empty/loading states  
+
+**Status:** Implemented on branch `stage/2.6-ux-trust-hardening`. See `docs/STAGE_2_6_REPORT.md`.
+
+---
+
 ## Upcoming
 
 ### Stage 3 — Task-scope analysis

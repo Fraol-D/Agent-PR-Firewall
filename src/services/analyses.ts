@@ -1,5 +1,14 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import {
+  buildConfidenceReason,
+  buildOverallConfidenceReason,
+} from "@/lib/analysis/confidence";
+import {
+  buildRiskBreakdown,
+  computeMergeDecision,
+} from "@/lib/analysis/decision";
+import { structureFindingEvidence } from "@/lib/analysis/evidence";
 import { logAnalysis } from "@/lib/analysis/log";
 import { runPullRequestAnalysis } from "@/lib/analysis/orchestrator";
 import type {
@@ -262,7 +271,14 @@ export async function getAnalysisDetail(
       (f) => {
         const sev = f.severity as FindingSeverity;
         severityBreakdown[sev] = (severityBreakdown[sev] ?? 0) + 1;
-        return {
+        const affectedFiles = Array.isArray(f.affected_files)
+          ? (f.affected_files as string[])
+          : [];
+        const confidence =
+          f.confidence === null || f.confidence === undefined
+            ? null
+            : Number(f.confidence);
+        const base = {
           id: f.id,
           analysisId: f.analysis_id,
           category: f.category as AnalysisFindingRecord["category"],
@@ -271,15 +287,15 @@ export async function getAnalysisDetail(
           summary: f.summary,
           explanation: f.explanation,
           evidence: f.evidence ?? "",
-          affectedFiles: Array.isArray(f.affected_files)
-            ? (f.affected_files as string[])
-            : [],
-          confidence:
-            f.confidence === null || f.confidence === undefined
-              ? null
-              : Number(f.confidence),
+          affectedFiles,
+          confidence,
           isInference: f.is_inference,
           sortOrder: f.sort_order,
+        };
+        return {
+          ...base,
+          confidenceReason: buildConfidenceReason(base),
+          structuredEvidence: structureFindingEvidence(base),
         };
       },
     );
@@ -297,16 +313,40 @@ export async function getAnalysisDetail(
       patchExcerpt: f.patch_excerpt,
     }));
 
+    const deterministicResult =
+      (analysis.deterministic_result as unknown as DeterministicAnalysisResult) ??
+      null;
+
+    // Prefer deterministic recompute so historical rows get Stage 2.6 UX fields.
+    const decisionResult = computeMergeDecision({
+      findings: mappedFindings,
+      deterministic: deterministicResult,
+      aiOverallStatus: analysis.overall_status as OverallAnalysisStatus | null,
+    });
+
     return {
       ok: true,
       data: {
         ...mapAnalysis(analysis, currentHeadSha ?? prRow.head_sha),
+        // Align stored overall with deterministic decision for display consistency
+        overallStatus: decisionResult.overallStatus,
         findings: mappedFindings,
         changedFiles,
-        deterministicResult:
-          (analysis.deterministic_result as unknown as DeterministicAnalysisResult) ??
-          null,
+        deterministicResult,
         severityBreakdown,
+        decision: decisionResult.decision,
+        primaryReason: decisionResult.primaryReason,
+        decisionTrace: decisionResult.trace,
+        overallConfidence: decisionResult.overallConfidence,
+        overallConfidenceReason: buildOverallConfidenceReason(
+          decisionResult.overallConfidence,
+          {
+            docsOnly: decisionResult.docsOnly,
+            findingCount: mappedFindings.length,
+          },
+        ),
+        riskBreakdown: buildRiskBreakdown(mappedFindings),
+        docsOnly: decisionResult.docsOnly,
       },
     };
   } catch (err) {

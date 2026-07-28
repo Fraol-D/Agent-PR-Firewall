@@ -7,6 +7,7 @@ import { createDefaultAiProvider } from "@/lib/analysis/ai";
 import { buildAnalysisContext } from "@/lib/analysis/build-context";
 import { calibrateFindings } from "@/lib/analysis/confidence";
 import { collectPullRequestChanges } from "@/lib/analysis/collect-changes";
+import { computeMergeDecision } from "@/lib/analysis/decision";
 import { logAnalysis } from "@/lib/analysis/log";
 import {
   buildAnalyzedPathSet,
@@ -140,10 +141,40 @@ export async function runPullRequestAnalysis(
     analyzedPaths,
   );
 
+  // Stage 2.6: override AI overall with deterministic merge decision
+  // so stored overall_status matches the trust UI.
+  const decision = computeMergeDecision({
+    findings: calibratedFindings,
+    deterministic,
+    aiOverallStatus: ai.overallStatus,
+  });
+
+  let summary = ai.summary;
+  if (
+    decision.docsOnly &&
+    !/documentation only/i.test(summary)
+  ) {
+    summary = `This pull request modifies documentation only. ${summary}`.slice(
+      0,
+      4000,
+    );
+  }
+
   ai = {
     ...ai,
+    summary,
+    overallStatus: decision.overallStatus,
     findings: calibratedFindings,
   };
+
+  logAnalysis("decision_computed", {
+    analysisId: input.analysisId,
+    pullRequestId: input.pullRequestId,
+    headSha: pinnedHead,
+    decision: decision.decision,
+    docsOnly: decision.docsOnly,
+    overallConfidence: decision.overallConfidence,
+  });
 
   return {
     context,
