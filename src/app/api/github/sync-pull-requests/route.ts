@@ -1,6 +1,12 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 
-import { getAuthUser } from "@/lib/auth/session";
+import {
+  jsonError,
+  jsonOk,
+  parseJsonBody,
+  requireApiUser,
+  statusFromServiceCode,
+} from "@/lib/api/route-helpers";
 import {
   getGitHubAppMissingConfig,
   isGitHubAppConfigured,
@@ -13,41 +19,44 @@ import { syncPullRequestsForUser } from "@/services/pull-requests";
  * Imports existing PRs from GitHub for connected repositories.
  */
 export async function POST(request: NextRequest) {
-  const user = await getAuthUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireApiUser();
+  if (auth.error) {
+    return auth.error;
   }
 
   if (!isGitHubAppConfigured() || !isAdminClientConfigured()) {
-    return NextResponse.json(
-      {
-        error: "GitHub App or Supabase service role is not configured",
-        missing: getGitHubAppMissingConfig(),
-      },
-      { status: 503 },
+    return jsonError(
+      503,
+      "GitHub App or Supabase service role is not configured",
+      { missing: getGitHubAppMissingConfig() },
     );
   }
 
-  let repositoryId: string | undefined;
-  try {
-    const body = (await request.json()) as { repositoryId?: string };
-    repositoryId = body.repositoryId;
-  } catch {
-    // empty body is fine
+  // Empty body is allowed (sync all repos for the user).
+  const parsed = await parseJsonBody<{ repositoryId?: string }>(request, {
+    optional: true,
+  });
+  if (parsed.error) {
+    return parsed.error;
   }
 
+  const repositoryId =
+    typeof parsed.body.repositoryId === "string" &&
+    parsed.body.repositoryId.trim() !== ""
+      ? parsed.body.repositoryId.trim()
+      : undefined;
+
   const result = await syncPullRequestsForUser({
-    userId: user.id,
+    userId: auth.user.id,
     repositoryId,
     state: "all",
   });
 
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error, code: result.code },
-      { status: 400 },
-    );
+    return jsonError(statusFromServiceCode(result.code), result.error, {
+      code: result.code,
+    });
   }
 
-  return NextResponse.json({ ok: true, ...result.data });
+  return jsonOk({ ...result.data });
 }
