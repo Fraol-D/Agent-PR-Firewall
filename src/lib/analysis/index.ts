@@ -1,28 +1,14 @@
 /**
- * Analysis engine entrypoint.
- * Stage 0: module boundaries only.
- * Deterministic and LLM-based analysis evolve independently in later stages.
+ * Analysis engine public surface — Stage 2.
  */
 
-export type AnalysisEngineModule =
-  | "orchestrator"
-  | "scope"
-  | "impact"
-  | "risk"
-  | "tests"
-  | "change"
-  | "dependency"
-  | "sensitive"
-  | "decision";
-
-export const ANALYSIS_ENGINE_MODULES: AnalysisEngineModule[] = [
-  "orchestrator",
-  "scope",
-  "impact",
-  "risk",
-  "tests",
-  "change",
-  "dependency",
-  "sensitive",
-  "decision",
-];
+export { runPullRequestAnalysis } from "@/lib/analysis/orchestrator";
+export { classifyFilePath } from "@/lib/analysis/classify";
+export {
+  createDefaultAiProvider,
+  isAiProviderConfigured,
+  getActiveAiProviderName,
+  OpenRouterAnalysisProvider,
+  GeminiAnalysisProvider,
+} from "@/lib/analysis/ai";
+export type * from "@/lib/analysis/types";

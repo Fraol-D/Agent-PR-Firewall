@@ -5,9 +5,9 @@ import {
   ArrowLeft,
   ExternalLink,
   GitBranch,
-  GitPullRequest,
 } from "lucide-react";
 
+import { AnalysisPanel } from "@/components/dashboard/analysis-panel";
 import { PrStatusBadge } from "@/components/dashboard/pr-status-badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { getCurrentUserProfile } from "@/lib/auth/session";
+import { getLatestAnalysisForPullRequest } from "@/services/analyses";
 import { getUserPullRequestById } from "@/services/pull-requests";
 
 interface PullRequestDetailPageProps {
@@ -73,12 +74,21 @@ export default async function PullRequestDetailPage({
 
   const pr = result.data;
 
+  const analysisResult = await getLatestAnalysisForPullRequest(
+    user.id,
+    pr.id,
+    pr.headSha,
+  );
+  const initialAnalysis =
+    analysisResult.ok && analysisResult.data ? analysisResult.data : null;
+
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Button
           variant="ghost"
           size="sm"
+          nativeButton={false}
           render={<Link href="/dashboard/pull-requests" />}
         >
           <ArrowLeft data-icon="inline-start" />
@@ -88,6 +98,7 @@ export default async function PullRequestDetailPage({
           <Button
             variant="outline"
             size="sm"
+            nativeButton={false}
             render={
               <a href={pr.htmlUrl} target="_blank" rel="noopener noreferrer" />
             }
@@ -216,23 +227,11 @@ export default async function PullRequestDetailPage({
         </CardContent>
       </Card>
 
-      <Card className="border-dashed border-border/80 bg-muted/10 shadow-none">
-        <CardHeader>
-          <div className="flex items-start gap-3">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-              <GitPullRequest className="size-4" />
-            </div>
-            <div>
-              <CardTitle className="text-base">Analysis not available yet</CardTitle>
-              <CardDescription className="mt-1 leading-relaxed">
-                Scope, impact, risk, and decision engines are implemented in
-                Stages 2–4. This page currently shows GitHub ingestion metadata
-                only.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-      </Card>
+      <AnalysisPanel
+        pullRequestId={pr.id}
+        currentHeadSha={pr.headSha}
+        initialAnalysis={initialAnalysis}
+      />
 
       <Separator />
     </div>

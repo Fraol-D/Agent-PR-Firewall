@@ -20,13 +20,24 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getCurrentUserProfile } from "@/lib/auth/session";
+import { getAnalysisPerformanceMetrics } from "@/services/analyses";
 import { listUserPullRequests } from "@/services/pull-requests";
 import { getOverviewStats } from "@/services/repositories";
+
+function formatDuration(ms: number | null | undefined): string {
+  if (ms == null || !Number.isFinite(ms) || ms < 0) return "—";
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)} s`;
+  const minutes = Math.floor(seconds / 60);
+  const rem = seconds % 60;
+  return `${minutes}m ${rem.toFixed(0)}s`;
+}
 
 export default async function DashboardPage() {
   const user = await getCurrentUserProfile();
 
-  const [statsResult, prsResult] = await Promise.all([
+  const [statsResult, prsResult, perfResult] = await Promise.all([
     user
       ? getOverviewStats(user.id)
       : Promise.resolve({
@@ -44,6 +55,17 @@ export default async function DashboardPage() {
     user
       ? listUserPullRequests(user.id, { limit: 5 })
       : Promise.resolve({ ok: true as const, data: [] }),
+    user
+      ? getAnalysisPerformanceMetrics(user.id)
+      : Promise.resolve({
+          ok: true as const,
+          data: {
+            totalCompleted: 0,
+            averageDurationMs: null,
+            fastestDurationMs: null,
+            slowestDurationMs: null,
+          },
+        }),
   ]);
 
   const stats = statsResult.ok
@@ -60,6 +82,14 @@ export default async function DashboardPage() {
 
   const recentPrs = prsResult.ok ? prsResult.data : [];
   const hasRepos = stats.connectedRepositories > 0;
+  const perf = perfResult.ok
+    ? perfResult.data
+    : {
+        totalCompleted: 0,
+        averageDurationMs: null,
+        fastestDurationMs: null,
+        slowestDurationMs: null,
+      };
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -118,6 +148,51 @@ export default async function DashboardPage() {
           hint="After Stage 4 decisions"
         />
       </div>
+
+      <Card className="border-border/80 bg-card/80 shadow-none">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Analysis performance</CardTitle>
+          <CardDescription>
+            Completed analyses only (wall-clock duration including GitHub + AI).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border border-border/70 bg-background/40 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Completed
+              </p>
+              <p className="mt-1 font-mono text-lg font-semibold">
+                {perf.totalCompleted}
+              </p>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-background/40 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Average duration
+              </p>
+              <p className="mt-1 font-mono text-lg font-semibold">
+                {formatDuration(perf.averageDurationMs)}
+              </p>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-background/40 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Fastest
+              </p>
+              <p className="mt-1 font-mono text-lg font-semibold">
+                {formatDuration(perf.fastestDurationMs)}
+              </p>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-background/40 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Slowest
+              </p>
+              <p className="mt-1 font-mono text-lg font-semibold">
+                {formatDuration(perf.slowestDurationMs)}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {!hasRepos ? <ConnectRepoCard /> : null}
 

@@ -10,15 +10,14 @@ This is **not** a generic AI code reviewer. Its central question:
 
 ## Current stage
 
-**Stage 1 — GitHub Integration**
+**Stage 2 — PR Analysis Pipeline**
 
-- Stage 0 foundation (auth, dashboard shell, design system)
-- GitHub App install + repository connection
-- Secure webhook ingestion with signature verification
-- Pull request persistence (open / synchronize / reopen / close)
-- Dashboard list + detail views for real PRs
-
-Analysis engines remain stubs until Stage 2+.
+- Stage 0 foundation + Stage 1 GitHub integration
+- Manual **Analyze pull request** on PR detail
+- Deterministic changed-file collection + classification
+- Bounded analysis context (secrets/lockfiles/binaries excluded)
+- AI-assisted structured findings via **OpenRouter free model** `cohere/north-mini-code:free` (`OPENROUTER_API_KEY`)
+- Historical analyses per commit SHA with outdated detection
 
 ## Stack
 
@@ -77,6 +76,9 @@ cp .env.example .env.local
 | `GITHUB_APP_WEBHOOK_SECRET` | **Stage 1** | HMAC signature verification |
 | `GITHUB_APP_CLIENT_ID` | Optional | App OAuth (not required for Stage 1) |
 | `GITHUB_APP_CLIENT_SECRET` | Optional | App OAuth (not required for Stage 1) |
+| `OPENROUTER_API_KEY` | **Stage 2** | Free OpenRouter key for PR analysis |
+| `OPENROUTER_MODEL` | Optional | Default `cohere/north-mini-code:free` |
+| `AI_PROVIDER` | Optional | `openrouter` (default) or `gemini` |
 
 ### 3. Supabase
 
@@ -84,8 +86,11 @@ cp .env.example .env.local
 2. Run migrations in the SQL editor **in order**:
    - `supabase/migrations/001_initial_schema.sql`
    - `supabase/migrations/002_stage1_github_integration.sql`
+   - `supabase/migrations/003_stage2_analysis_pipeline.sql`
+   - `supabase/migrations/004_stage2_5_hardening.sql`
 3. Enable **GitHub** under Authentication → Providers (OAuth App for sign-in).
 4. Copy **Project URL**, **anon key**, and **service_role** key into `.env.local`.
+5. Add a free `OPENROUTER_API_KEY` from https://openrouter.ai/keys for Stage 2 analysis. Default model: `cohere/north-mini-code:free` (no paid credits required).
 
 ### 4. Create the GitHub App
 
@@ -169,12 +174,13 @@ Open the app URL → sign in → **Repositories** → **Connect repository**.
 | --- | --- |
 | **0** | Landing, GitHub sign-in, protected dashboard shell |
 | **1** | App install, connected repos, signed webhooks, PR list/detail |
+| **2** | Manual analyze, structured findings, commit-aware history |
 
 ## Development stages
 
 0. Foundation  
-1. GitHub Integration ← **current**  
-2. Deterministic Analysis  
+1. GitHub Integration  
+2. PR Analysis Pipeline ← **current**  
 3. Task-Scope Analysis  
 4. Decision Engine  
 5. Agent Feedback Loop  
