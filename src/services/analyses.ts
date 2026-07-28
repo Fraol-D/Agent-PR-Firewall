@@ -41,6 +41,7 @@ function mapAnalysis(
     startedAt: row.started_at,
     completedAt: row.completed_at,
     durationMs: row.duration_ms ?? null,
+    evaluationNotes: row.evaluation_notes ?? null,
     createdAt: row.created_at,
     isOutdated: Boolean(
       currentHeadSha &&
