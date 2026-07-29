@@ -184,6 +184,8 @@ export interface AnalysisRecord {
   completedAt: string | null;
   /** Wall-clock duration in ms for completed analyses. */
   durationMs: number | null;
+  /** Optional free-text notes for evaluation / human review. */
+  evaluationNotes: string | null;
   createdAt: string;
   isOutdated: boolean;
 }
