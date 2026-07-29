@@ -12,6 +12,7 @@ export type AnalysisLogEvent =
   | "ai_request_completed"
   | "zod_validation"
   | "decision_computed"
+  | "scope_analysis_completed"
   | "persistence_completed"
   | "analysis_failed"
   | "analysis_completed";

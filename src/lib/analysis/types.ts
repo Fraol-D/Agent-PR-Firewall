@@ -1,6 +1,17 @@
 /**
- * Stage 2 analysis domain types.
+ * Stage 2 / 2.5 / 2.6 / 3 analysis domain types.
  */
+
+import type { IntentScopeResult } from "@/lib/analysis/scope/types";
+
+export type {
+  IntentScopeResult,
+  ScopeMatch,
+  ScopePrClassification,
+  ImplementationCoverage,
+  MissingWorkItem,
+  TaskSource,
+} from "@/lib/analysis/scope/types";
 
 export type AnalysisJobStatus =
   | "pending"
@@ -164,6 +175,8 @@ export interface DeterministicAnalysisResult {
   sensitiveAreas: string[];
   hasTests: boolean;
   changedFiles: ChangedFileEvidence[];
+  /** Stage 3 — intent verification & scope analysis (optional for older rows). */
+  intentScope?: IntentScopeResult | null;
 }
 
 export interface AnalysisRecord {
@@ -214,4 +227,6 @@ export interface AnalysisDetail extends AnalysisRecord {
   overallConfidenceReason: ConfidenceReason | null;
   riskBreakdown: Record<string, number>;
   docsOnly: boolean;
+  /** Stage 3 — intent & scope (null when not computed / legacy analyses). */
+  intentScope: IntentScopeResult | null;
 }

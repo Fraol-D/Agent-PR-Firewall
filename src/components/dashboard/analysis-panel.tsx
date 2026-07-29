@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Circle,
+  Crosshair,
   FileText,
   Loader2,
   Play,
@@ -21,6 +22,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   ShieldX,
+  Target,
   XCircle,
 } from "lucide-react";
 
@@ -50,6 +52,7 @@ import {
   buildConfidenceReason,
   buildOverallConfidenceReason,
 } from "@/lib/analysis/confidence";
+import { classificationLabel } from "@/lib/analysis/scope/classify-pr";
 import type {
   AnalysisDetail,
   AnalysisFindingRecord,
@@ -57,6 +60,7 @@ import type {
   ConfidenceReason,
   DecisionTraceItem,
   FindingSeverity,
+  IntentScopeResult,
   MergeDecision,
   StructuredEvidence,
 } from "@/lib/analysis/types";
@@ -77,15 +81,21 @@ const severityOrder: FindingSeverity[] = [
 ];
 
 const severityStyles: Record<FindingSeverity, string> = {
-  critical: "bg-risk-blocked/25 text-risk-blocked-foreground border-transparent",
-  high: "bg-risk-required/25 text-risk-required-foreground border-transparent",
-  medium: "bg-risk-review/25 text-risk-review-foreground border-transparent",
-  low: "bg-risk-low/20 text-risk-low-foreground border-transparent",
-  info: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-transparent",
+  critical:
+    "border-transparent bg-red-600/15 text-red-900 dark:bg-red-500/20 dark:text-red-100",
+  high:
+    "border-transparent bg-orange-600/15 text-orange-950 dark:bg-orange-500/20 dark:text-orange-100",
+  medium:
+    "border-transparent bg-amber-600/15 text-amber-950 dark:bg-amber-500/20 dark:text-amber-100",
+  low:
+    "border-transparent bg-emerald-600/15 text-emerald-950 dark:bg-emerald-500/20 dark:text-emerald-100",
+  info:
+    "border-transparent bg-sky-500/15 text-sky-900 dark:bg-sky-500/20 dark:text-sky-100",
 };
 
 const PROGRESS_STEPS = [
   { id: "collect", label: "Collecting PR files" },
+  { id: "intent", label: "Extracting intent & scope" },
   { id: "filter", label: "Filtering context" },
   { id: "prompt", label: "Preparing prompt" },
   { id: "ai", label: "Running AI analysis" },
@@ -132,27 +142,29 @@ function decisionVisual(decision: MergeDecision): {
     case "safe_to_merge":
       return {
         icon: ShieldCheck,
+        // Light: dark green text on soft green wash. Dark: light mint text on green tint.
         shell:
-          "border-risk-low/40 bg-risk-low/10 text-risk-low-foreground dark:bg-risk-low/15",
-        badge: "bg-risk-low/25 text-risk-low-foreground border-transparent",
+          "border-emerald-600/30 bg-emerald-50 text-emerald-950 dark:border-emerald-400/35 dark:bg-emerald-500/15 dark:text-emerald-50",
+        badge:
+          "border-transparent bg-emerald-600/15 text-emerald-900 dark:bg-emerald-400/20 dark:text-emerald-50",
         label: mergeDecisionLabel(decision),
       };
     case "review_recommended":
       return {
         icon: ShieldAlert,
         shell:
-          "border-risk-review/40 bg-risk-review/10 text-risk-review-foreground",
+          "border-amber-600/30 bg-amber-50 text-amber-950 dark:border-amber-400/35 dark:bg-amber-500/15 dark:text-amber-50",
         badge:
-          "bg-risk-review/25 text-risk-review-foreground border-transparent",
+          "border-transparent bg-amber-600/15 text-amber-950 dark:bg-amber-400/20 dark:text-amber-50",
         label: mergeDecisionLabel(decision),
       };
     case "block_merge":
       return {
         icon: ShieldX,
         shell:
-          "border-risk-blocked/40 bg-risk-blocked/10 text-risk-blocked-foreground",
+          "border-red-600/35 bg-red-50 text-red-950 dark:border-red-400/40 dark:bg-red-500/15 dark:text-red-50",
         badge:
-          "bg-risk-blocked/25 text-risk-blocked-foreground border-transparent",
+          "border-transparent bg-red-600/15 text-red-950 dark:bg-red-400/25 dark:text-red-50",
         label: mergeDecisionLabel(decision),
       };
   }
@@ -182,10 +194,10 @@ export function AnalysisPanel({
   const effectiveStatus: AnalysisJobStatus | "not_started" =
     analysis?.status ?? "not_started";
 
-  const isActive =
-    busy ||
-    effectiveStatus === "pending" ||
-    effectiveStatus === "running";
+  const isJobActive =
+    effectiveStatus === "pending" || effectiveStatus === "running";
+
+  const isActive = busy || isJobActive;
 
   const clearProgressTimer = useCallback(() => {
     if (progressTimerRef.current) {
@@ -226,17 +238,47 @@ export function AnalysisPanel({
     return body.analysis ?? null;
   }, []);
 
+  // Poll only while the job is truly pending/running.
+  // Cap attempts so a stuck row can never spam the API forever.
   useEffect(() => {
-    if (!analysis || (!isActive && !busy)) return;
-    if (busy) return; // start request owns the cycle when busy
+    if (!analysis?.id || !isJobActive || busy) return;
+
     const id = analysis.id;
+    let attempts = 0;
+    const maxAttempts = 90; // ~3 minutes at 2s
+    const pollStarted = Date.now();
+    const maxPollMs = 5 * 60 * 1000;
+
     const timer = setInterval(() => {
+      attempts += 1;
+      if (attempts > maxAttempts || Date.now() - pollStarted > maxPollMs) {
+        clearInterval(timer);
+        setProgressFailed(true);
+        setError(
+          "Analysis appears stuck or timed out. Use Retry analysis to start a fresh run.",
+        );
+        setAnalysis((prev) => {
+          if (!prev) return prev;
+          if (prev.status !== "pending" && prev.status !== "running") {
+            return prev;
+          }
+          return {
+            ...prev,
+            status: "failed",
+            errorMessage:
+              prev.errorMessage ??
+              "Analysis timed out while waiting for completion. Retry analysis.",
+          };
+        });
+        return;
+      }
       void refreshAnalysis(id).catch(() => {
         /* ignore transient poll errors */
       });
     }, 2000);
+
     return () => clearInterval(timer);
-  }, [analysis, isActive, busy, refreshAnalysis]);
+  }, [analysis?.id, isJobActive, busy, refreshAnalysis]);
 
   useEffect(() => () => clearProgressTimer(), [clearProgressTimer]);
 
@@ -499,13 +541,13 @@ export function AnalysisPanel({
                     aria-hidden
                   />
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] opacity-80">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-current/75">
                       Decision
                     </p>
                     <p className="mt-0.5 text-lg font-semibold tracking-tight">
                       {decisionMeta.label}
                     </p>
-                    <p className="mt-1 max-w-2xl text-sm leading-relaxed opacity-90">
+                    <p className="mt-1 max-w-2xl text-sm leading-relaxed text-current/90">
                       {primaryReason}
                     </p>
                   </div>
@@ -518,7 +560,7 @@ export function AnalysisPanel({
                     {decisionMeta.label}
                   </Badge>
                   {overallConfidence != null ? (
-                    <p className="font-mono text-xs opacity-90">
+                    <p className="font-mono text-xs text-current/90">
                       Confidence {(overallConfidence * 100).toFixed(0)}%
                       {overallConfidenceReason
                         ? ` · ${titleCase(overallConfidenceReason.level)}`
@@ -526,7 +568,7 @@ export function AnalysisPanel({
                     </p>
                   ) : null}
                   {overallConfidenceReason ? (
-                    <p className="max-w-[16rem] text-[11px] leading-snug opacity-80">
+                    <p className="max-w-[16rem] text-[11px] leading-snug text-current/80">
                       {overallConfidenceReason.label}
                     </p>
                   ) : null}
@@ -552,6 +594,14 @@ export function AnalysisPanel({
                   ))}
                 </ul>
               </section>
+            ) : null}
+
+            {/* Stage 3 — Intent & Scope */}
+            {analysis.intentScope ? (
+              <IntentScopeSection
+                intent={analysis.intentScope}
+                decisionLabel={decisionMeta.label}
+              />
             ) : null}
 
             {/* Risk breakdown */}
@@ -691,7 +741,10 @@ export function AnalysisPanel({
               {analysis.findings.length === 0 ? (
                 <EmptyState
                   icon={
-                    <CheckCircle2 className="size-8 text-risk-low" aria-hidden />
+                    <CheckCircle2
+                      className="size-8 text-emerald-600 dark:text-emerald-400"
+                      aria-hidden
+                    />
                   }
                   title="No findings"
                   body="The analysis completed without structured findings for this change set."
@@ -749,6 +802,235 @@ export function AnalysisPanel({
   );
 }
 
+function IntentScopeSection({
+  intent,
+  decisionLabel,
+}: {
+  intent: IntentScopeResult;
+  decisionLabel: string;
+}) {
+  const matchStyles: Record<string, string> = {
+    matches:
+      "border-transparent bg-emerald-600/15 text-emerald-950 dark:bg-emerald-500/20 dark:text-emerald-100",
+    partial:
+      "border-transparent bg-amber-600/15 text-amber-950 dark:bg-amber-500/20 dark:text-amber-100",
+    exceeds:
+      "border-transparent bg-orange-600/15 text-orange-950 dark:bg-orange-500/20 dark:text-orange-100",
+    unrelated:
+      "border-transparent bg-red-600/15 text-red-950 dark:bg-red-500/20 dark:text-red-100",
+    unknown: "bg-muted text-muted-foreground border-transparent",
+  };
+
+  return (
+    <section
+      aria-label="Intent and scope"
+      className="space-y-3 rounded-xl border border-border/70 bg-background/40 p-4"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <Target className="size-4 text-brand" aria-hidden />
+        <h3 className="text-sm font-semibold">Intent &amp; scope</h3>
+        <Badge variant="outline" className="text-[10px]">
+          Stage 3
+        </Badge>
+      </div>
+
+      {/* Compact summary strip */}
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <MetaStat label="Decision" value={decisionLabel} />
+        <MetaStat label="Task summary" value={intent.taskSummary} />
+        <MetaStat
+          label="Scope match"
+          value={scopeMatchLabel(intent.scopeMatch)}
+        />
+        <MetaStat
+          label="Coverage"
+          value={titleCase(intent.coverage)}
+        />
+        <MetaStat
+          label="Scope creep"
+          value={
+            intent.scopeCreepDetected
+              ? `Detected (${intent.unrelatedFiles.length} file${intent.unrelatedFiles.length === 1 ? "" : "s"})`
+              : "None detected"
+          }
+        />
+        <MetaStat
+          label="Overall recommendation"
+          value={intent.overallRecommendation}
+        />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="secondary">
+          {classificationLabel(intent.classification)}
+        </Badge>
+        {intent.secondaryClassifications.map((c) => (
+          <Badge key={c} variant="outline" className="text-[11px]">
+            {classificationLabel(c)}
+          </Badge>
+        ))}
+        <Badge
+          variant="outline"
+          className={cn(matchStyles[intent.scopeMatch] ?? matchStyles.unknown)}
+        >
+          {scopeMatchLabel(intent.scopeMatch)}
+        </Badge>
+        <Badge variant="outline">
+          Coverage · {titleCase(intent.coverage)}
+        </Badge>
+      </div>
+
+      <div className="rounded-lg border border-border/60 bg-muted/15 p-3">
+        <div className="flex items-start gap-2">
+          <Crosshair className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          <div className="min-w-0 space-y-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Task
+            </p>
+            <p className="text-sm font-medium leading-snug">{intent.taskSummary}</p>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {intent.scopeMatchReason}
+            </p>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {intent.coverageReason}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {(intent.expectedAreas.length > 0 || intent.actualAreas.length > 0) && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Expected areas
+            </p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {intent.expectedAreas.length === 0 ? (
+                <span className="text-xs text-muted-foreground">—</span>
+              ) : (
+                intent.expectedAreas.map((a) => (
+                  <Badge key={a} variant="outline" className="font-normal text-[11px]">
+                    {a}
+                  </Badge>
+                ))
+              )}
+            </div>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Actual areas
+            </p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {intent.actualAreas.length === 0 ? (
+                <span className="text-xs text-muted-foreground">—</span>
+              ) : (
+                intent.actualAreas.map((a) => (
+                  <Badge key={a} variant="secondary" className="font-normal text-[11px]">
+                    {a}
+                  </Badge>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {intent.scopeCreepDetected ? (
+        <div
+          role="status"
+          className="rounded-lg border border-risk-review/40 bg-risk-review/10 px-3 py-2"
+        >
+          <p className="text-xs font-semibold text-risk-review-foreground">
+            Scope creep detected
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {intent.scopeCreepSummary}
+          </p>
+          {intent.unrelatedFiles.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {intent.unrelatedFiles.slice(0, 12).map((f) => (
+                <code
+                  key={f}
+                  className="rounded bg-background/60 px-1.5 py-0.5 font-mono text-[10px]"
+                >
+                  {f}
+                </code>
+              ))}
+              {intent.unrelatedFiles.length > 12 ? (
+                <span className="text-[10px] text-muted-foreground">
+                  +{intent.unrelatedFiles.length - 12} more
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {intent.missingWork.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Warnings · missing work
+          </p>
+          <ul className="space-y-1.5">
+            {intent.missingWork.map((item) => (
+              <li
+                key={item.id}
+                className="flex items-start gap-2 rounded-lg border border-border/60 px-3 py-2 text-xs"
+              >
+                {item.severity === "high" ? (
+                  <XCircle className="mt-0.5 size-3.5 shrink-0 text-destructive" aria-hidden />
+                ) : item.severity === "warning" ? (
+                  <AlertTriangle
+                    className="mt-0.5 size-3.5 shrink-0 text-risk-review-foreground"
+                    aria-hidden
+                  />
+                ) : (
+                  <Circle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                )}
+                <div>
+                  <p className="font-medium">{item.label}</p>
+                  <p className="text-muted-foreground">{item.detail}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {intent.taskSources.length > 0 ? (
+        <details className="text-xs">
+          <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+            Task sources ({intent.taskSources.length})
+          </summary>
+          <ul className="mt-2 space-y-1.5 border-t border-border/50 pt-2">
+            {intent.taskSources.map((s) => (
+              <li key={`${s.type}-${s.label}`}>
+                <span className="font-medium">{s.label}: </span>
+                <span className="text-muted-foreground">{s.excerpt}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </section>
+  );
+}
+
+function scopeMatchLabel(match: IntentScopeResult["scopeMatch"]): string {
+  switch (match) {
+    case "matches":
+      return "Matches task";
+    case "partial":
+      return "Partial match";
+    case "exceeds":
+      return "Exceeds scope";
+    case "unrelated":
+      return "Unrelated";
+    default:
+      return "Unknown";
+  }
+}
+
 function FindingCard({ finding }: { finding: AnalysisFindingRecord }) {
   const [expanded, setExpanded] = useState(false);
   const evidence: StructuredEvidence =
@@ -779,7 +1061,7 @@ function FindingCard({ finding }: { finding: AnalysisFindingRecord }) {
             Inference
           </span>
         ) : (
-          <span className="text-[10px] uppercase tracking-wide text-risk-low">
+          <span className="text-[10px] uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
             Observed
           </span>
         )}
@@ -905,7 +1187,7 @@ function ProgressPanel({
             >
               {done ? (
                 <Check
-                  className="size-4 text-risk-low"
+                  className="size-4 text-emerald-600 dark:text-emerald-400"
                   aria-label="Completed"
                 />
               ) : isFailedStep ? (
@@ -942,7 +1224,7 @@ function TraceIcon({ tone }: { tone: DecisionTraceItem["tone"] }) {
   if (tone === "positive") {
     return (
       <Check
-        className="mt-0.5 size-3.5 shrink-0 text-risk-low"
+        className="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400"
         aria-label="Positive"
       />
     );
