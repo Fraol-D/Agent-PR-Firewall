@@ -1,208 +1,238 @@
 # Agent PR Firewall
 
-Scope, impact, and risk analysis for autonomous coding-agent pull requests.
+**Scope, impact, and intent analysis for pull requests—especially those written by coding agents.**
 
-> AI coding agents can generate software changes faster than humans can manually understand them. Agent PR Firewall analyzes agent PRs for task-scope compliance, change impact, security-sensitive changes, and overall risk before those changes are trusted.
+Agent PR Firewall is a GitHub-native developer tool that answers a different question than a generic AI code reviewer:
 
-This is **not** a generic AI code reviewer. Its central question:
+> Did the agent (or author) do what was asked, and what else might this change affect?
 
-> Did the agent do what it was asked to do, and what else might this change affect?
+It sits between autonomous coding agents and human merge trust: deterministic change facts first, then bounded AI judgment, then an explainable merge recommendation.
 
-## Current stage
+**Product version:** v0.3.0 (Stage 3 — Scope & Consistency Analysis)
+**License:** Private / portfolio (see [License](#license))
 
-**Stage 2 — PR Analysis Pipeline**
+---
 
-- Stage 0 foundation + Stage 1 GitHub integration
-- Manual **Analyze pull request** on PR detail
-- Deterministic changed-file collection + classification
-- Bounded analysis context (secrets/lockfiles/binaries excluded)
-- AI-assisted structured findings via **OpenRouter free model** `cohere/north-mini-code:free` (`OPENROUTER_API_KEY`)
-- Historical analyses per commit SHA with outdated detection
+## Why it exists
 
-## Stack
+Coding agents can open PRs faster than humans can re-read them. Code can be green on tests and still:
 
-| Layer | Choice |
-| --- | --- |
-| App | Next.js modular monolith |
-| UI | React, Tailwind, shadcn/ui, Lucide |
-| Auth | GitHub OAuth (Supabase Auth) |
-| Data | Supabase PostgreSQL |
-| GitHub | GitHub App + Webhooks + Octokit |
-| Analysis | Modular engine (stubs until Stage 2) |
+- Edit files outside the stated task
+- Touch auth, database, or config without calling it out
+- Skip tests, docs, or rollback paths
+- Look “fine” while increasing blast radius
 
-## Project structure
+Teams need a **scope + risk + intent** layer—not more style nits.
+
+---
+
+## Core workflow
 
 ```text
-src/
-├── app/
-│   ├── api/github/      # install, setup, webhooks
-│   ├── auth/            # OAuth callback
-│   └── dashboard/       # protected UI
-├── components/
-├── lib/
-│   ├── auth/
-│   ├── supabase/        # user client + service-role admin
-│   ├── github/          # App auth, config, webhook verify
-│   └── analysis/        # Stage 2+ stubs
-├── services/            # installations, repos, PRs, events
-├── types/
-└── config/
-supabase/migrations/
+Sign in with GitHub
+      → Install GitHub App on a repository
+      → Import or ingest pull requests
+      → Open PR detail → Analyze pull request
+      → Review Decision Engine, Scope & Consistency Analysis, findings, evidence
+      → Re-analyze when head SHA moves
 ```
 
-## Setup
+Analysis is **manual** in v0.3.0 (no silent auto-merge or required status checks).
 
-### 1. Install dependencies
+---
+
+## Features
+
+| Area | Capability |
+| --- | --- |
+| **GitHub** | App install, webhooks, PR import without a tunnel |
+| **Analysis** | SHA-pinned diffs, file classification, bounded AI context |
+| **Findings** | Structured severity/category cards with evidence |
+| **Decision Engine** | Safe to merge · Review recommended · Block merge |
+| **Scope & Consistency Analysis** | Task extraction, classification, creep, coverage, missing work |
+| **Trust UX** | Decision trace, confidence reasons, progress steps, notifications |
+| **Cost** | Default free OpenRouter model (`cohere/north-mini-code:free`) |
+
+---
+
+## Screenshots
+
+> Place real captures under `docs/images/` when available.
+
+| Surface | Placeholder |
+| --- | --- |
+| Landing | `docs/images/landing.png` |
+| Dashboard | `docs/images/dashboard.png` |
+| PR analysis — decision | `docs/images/analysis-decision.png` |
+| PR analysis — intent & scope | `docs/images/analysis-intent.png` |
+| Findings | `docs/images/analysis-findings.png` |
+
+---
+
+## Architecture overview
+
+```text
+Next.js (App Router) modular monolith
+  ├── Dashboard UI (AnalysisPanel)
+  ├── API routes (/api/github/*, /api/analysis/*)
+  ├── Services (installations, PRs, analyses)
+  └── Analysis engine
+        collect → scope & consistency → context → AI → calibrate → Decision Engine → persist
+
+GitHub App (Octokit)     Supabase (Auth + Postgres + RLS)
+OpenRouter free model    (optional Gemini free tier)
+```
+
+Deep dive: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+
+---
+
+## Local setup
+
+### Prerequisites
+
+- Node.js 20+
+- npm
+- Supabase project
+- GitHub account + ability to create a GitHub App
+- OpenRouter account (free key)
+
+### Install
 
 ```bash
+git clone https://github.com/Fraol-D/Agent-PR-Firewall.git
+cd Agent-PR-Firewall   # local folder may be named Agent-Firewal
 npm install
-```
-
-### 2. Environment variables
-
-```bash
 cp .env.example .env.local
 ```
 
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `NEXT_PUBLIC_APP_URL` | Yes | Public app origin (local or tunnel) |
-| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Browser/server user client |
-| `SUPABASE_SERVICE_ROLE_KEY` | **Stage 1** | Webhook + setup writes (server only) |
-| `GITHUB_APP_ID` | **Stage 1** | GitHub App ID |
-| `GITHUB_APP_SLUG` | **Stage 1** | App slug for install URL |
-| `GITHUB_APP_PRIVATE_KEY` | **Stage 1** | App private key (`\n` escaped OK) |
-| `GITHUB_APP_WEBHOOK_SECRET` | **Stage 1** | HMAC signature verification |
-| `GITHUB_APP_CLIENT_ID` | Optional | App OAuth (not required for Stage 1) |
-| `GITHUB_APP_CLIENT_SECRET` | Optional | App OAuth (not required for Stage 1) |
-| `OPENROUTER_API_KEY` | **Stage 2** | Free OpenRouter key for PR analysis |
-| `OPENROUTER_MODEL` | Optional | Default `cohere/north-mini-code:free` |
-| `AI_PROVIDER` | Optional | `openrouter` (default) or `gemini` |
+### Database
 
-### 3. Supabase
+In the Supabase SQL editor, apply migrations **in order**:
 
-1. Create a Supabase project.
-2. Run migrations in the SQL editor **in order**:
-   - `supabase/migrations/001_initial_schema.sql`
-   - `supabase/migrations/002_stage1_github_integration.sql`
-   - `supabase/migrations/003_stage2_analysis_pipeline.sql`
-   - `supabase/migrations/004_stage2_5_hardening.sql`
-3. Enable **GitHub** under Authentication → Providers (OAuth App for sign-in).
-4. Copy **Project URL**, **anon key**, and **service_role** key into `.env.local`.
-5. Add a free `OPENROUTER_API_KEY` from https://openrouter.ai/keys for Stage 2 analysis. Default model: `cohere/north-mini-code:free` (no paid credits required).
+1. `supabase/migrations/001_initial_schema.sql`
+2. `supabase/migrations/002_stage1_github_integration.sql`
+3. `supabase/migrations/003_stage2_analysis_pipeline.sql`
+4. `supabase/migrations/004_stage2_5_hardening.sql`
 
-### 4. Create the GitHub App
-
-1. Open [GitHub → Settings → Developer settings → GitHub Apps](https://github.com/settings/apps) → **New GitHub App**.
-2. Fill in:
-
-| Field | Value |
-| --- | --- |
-| GitHub App name | e.g. `Agent PR Firewall` |
-| Homepage URL | `http://localhost:3000` (or your tunnel URL) |
-| Callback URL | `{APP_URL}/api/github/setup` |
-| Setup URL | `{APP_URL}/api/github/setup` |
-| **Redirect on update** | Enable |
-| Webhook URL | `{APP_URL}/api/github/webhooks` |
-| Webhook secret | Long random string → same as `GITHUB_APP_WEBHOOK_SECRET` |
-
-3. **Repository permissions** (minimum for Stage 1):
-
-| Permission | Access |
-| --- | --- |
-| Metadata | Read-only |
-| Contents | Read-only |
-| Pull requests | Read-only |
-
-4. **Subscribe to events**:
-
-- `Installation`
-- `Installation repositories`
-- `Pull request`
-
-5. Create the App, then:
-   - Note **App ID** → `GITHUB_APP_ID`
-   - Note **slug** from the public page URL (`github.com/apps/<slug>`) → `GITHUB_APP_SLUG`
-   - Generate a **private key** → paste into `GITHUB_APP_PRIVATE_KEY` (use `\n` for newlines in `.env.local`)
-
-### 5. Local webhooks (required for real PR events)
-
-GitHub cannot reach `localhost`. Use a tunnel:
-
-```bash
-# example with ngrok
-ngrok http 3000
-```
-
-Then set:
-
-```env
-NEXT_PUBLIC_APP_URL=https://YOUR_SUBDOMAIN.ngrok-free.app
-```
-
-Update the GitHub App **Homepage**, **Setup URL**, and **Webhook URL** to the same public origin.
-
-Restart `npm run dev` after env changes.
-
-### 6. Run the app
+### Run
 
 ```bash
 npm run dev
 ```
 
-Open the app URL → sign in → **Repositories** → **Connect repository**.
+Open `http://localhost:3000` → sign in → connect a repo → import PRs → analyze.
 
-## End-to-end test checklist
+---
 
-1. Sign in with GitHub (Supabase OAuth).
-2. Click **Connect repository** → install the App on a test repo.
-3. Confirm you return to `/dashboard/repositories` with **Connected** status.
-4. Open a PR (or push to an existing PR branch) on that repo.
-5. Confirm the PR appears under **Pull requests** and on the overview.
-6. Open the PR detail page and verify metadata + ingestion history.
-7. Push another commit → PR updates in place (no duplicate row).
+## Environment variables
 
-### Manual webhook signature check
+Copy from [`.env.example`](.env.example). Never commit `.env.local` or PEM keys.
 
-- Valid signature → `200` / `202` JSON response
-- Invalid `X-Hub-Signature-256` → `401 Invalid signature`
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_APP_URL` | Yes | App origin (`http://localhost:3000` or tunnel) |
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Public anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes (server) | Webhooks + analysis writes |
+| `GITHUB_APP_ID` | Yes | GitHub App ID |
+| `GITHUB_APP_SLUG` | Yes | App slug for install URL |
+| `GITHUB_APP_PRIVATE_KEY_PATH` | Yes* | Path to App PEM (preferred) |
+| `GITHUB_APP_PRIVATE_KEY` | Alt | Full PEM if not using path |
+| `GITHUB_APP_WEBHOOK_SECRET` | Yes | HMAC for webhooks |
+| `OPENROUTER_API_KEY` | Yes for analysis | Server-only AI key |
+| `OPENROUTER_MODEL` | Optional | Default `cohere/north-mini-code:free` |
+| `AI_PROVIDER` | Optional | `openrouter` (default) or `gemini` |
 
-## Stage acceptance
+\* Prefer `secrets/github-app.pem` (gitignored).
 
-| Stage | Criteria |
+---
+
+## GitHub App setup
+
+1. Create a GitHub App: [Developer settings → GitHub Apps](https://github.com/settings/apps).
+2. Configure:
+
+| Field | Value |
 | --- | --- |
-| **0** | Landing, GitHub sign-in, protected dashboard shell |
-| **1** | App install, connected repos, signed webhooks, PR list/detail |
-| **2** | Manual analyze, structured findings, commit-aware history |
+| Homepage URL | `{APP_URL}` |
+| Setup URL | `{APP_URL}/api/github/setup` |
+| Webhook URL | `{APP_URL}/api/github/webhooks` |
+| Webhook secret | Same as `GITHUB_APP_WEBHOOK_SECRET` |
+| Redirect on update | Enabled |
 
-## Development stages
+3. **Permissions (repo):** Metadata read, Contents read, Pull requests read.
+4. **Events:** Installation, Installation repositories, Pull request.
+5. Install the app on a test repository from the product **Repositories** page.
 
-0. Foundation  
-1. GitHub Integration  
-2. PR Analysis Pipeline ← **current**  
-3. Task-Scope Analysis  
-4. Decision Engine  
-5. Agent Feedback Loop  
-6. Portfolio and Product Polish  
+**User sign-in** uses Supabase GitHub OAuth (identity only)—not a user PAT for repo access.
 
-## Scripts
+**Local webhooks:** GitHub cannot reach `localhost`. Use ngrok/cloudflared **or** dashboard **Import PRs**.
+
+---
+
+## OpenRouter setup
+
+1. Create a key: https://openrouter.ai/keys
+2. Set `OPENROUTER_API_KEY` in `.env.local`.
+3. Keep `OPENROUTER_MODEL=cohere/north-mini-code:free` for $0 development.
+4. Optional: `AI_PROVIDER=gemini` + `GEMINI_API_KEY` (not default).
+
+---
+
+## Development workflow
 
 ```bash
-npm run dev      # development server
-npm run build    # production build
-npm run start    # start production server
+npm run dev      # local server
 npm run lint     # ESLint
+npm run build    # production build
 ```
 
-## Security
+Conventions:
 
-- User OAuth scopes are minimal (`read:user`, `user:email`).
-- Repository access is via GitHub App installation, not user PATs.
-- Webhooks are rejected without a valid HMAC signature.
-- `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET`, and `SUPABASE_SERVICE_ROLE_KEY` are server-only.
-- RLS still scopes user reads; webhooks write with the service role on the server.
+- Business logic in `src/services/` and `src/lib/`; thin routes
+- Deterministic analysis before LLM
+- No secrets in git (`secrets/`, `.env*`, `*.pem`)
+- Feature work on short-lived branches; keep `main` product-ready
+
+See [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) and [`docs/TESTING.md`](docs/TESTING.md).
+
+---
+
+## Documentation map
+
+| Doc | Contents |
+| --- | --- |
+| [`docs/PRD.md`](docs/PRD.md) | Product requirements |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System design |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Stages 0–6 |
+| [`docs/DECISION_ENGINE.md`](docs/DECISION_ENGINE.md) | Merge recommendation rules |
+| [`docs/TESTING.md`](docs/TESTING.md) | PR test scenarios |
+| [`docs/HANDOFF_STAGE3.md`](docs/HANDOFF_STAGE3.md) | Engineering handoff |
+| [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) | How to contribute |
+| [`docs/STAGE_3_REPORT.md`](docs/STAGE_3_REPORT.md) | Stage 3 implementation notes |
+
+---
+
+## Roadmap (summary)
+
+| Stage | Status |
+| --- | --- |
+| 0 Foundation | Done |
+| 1 GitHub integration | Done |
+| 2 PR analysis pipeline | Done |
+| 2.5 Hardening | Done |
+| 2.6 UX & trust | Done |
+| 3 Scope & Consistency Analysis | Done (v0.3.0) |
+| 4 Decision engine productization | Next |
+| 5 Agent feedback loop | Planned |
+| 6 Portfolio polish | Planned |
+
+Details: [`docs/ROADMAP.md`](docs/ROADMAP.md)
+
+---
 
 ## License
 
-Private / portfolio project unless otherwise stated.
+Private / portfolio project unless otherwise stated by the repository owner.
+Not an official GitHub or OpenRouter product.
