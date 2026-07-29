@@ -83,7 +83,7 @@ export default async function PullRequestDetailPage({
     analysisResult.ok && analysisResult.data ? analysisResult.data : null;
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6">
+    <div className="mx-auto flex max-w-5xl flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Button
           variant="ghost"
@@ -109,7 +109,8 @@ export default async function PullRequestDetailPage({
         ) : null}
       </div>
 
-      <div className="space-y-3">
+      <section className="surface rounded-3xl px-5 py-5 sm:px-6 sm:py-6">
+        <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline" className="font-mono text-[11px]">
             {pr.repositoryFullName}
@@ -122,7 +123,9 @@ export default async function PullRequestDetailPage({
             <Badge variant="secondary">Draft</Badge>
           ) : null}
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight">{pr.title}</h1>
+        <h1 className="max-w-4xl text-3xl font-semibold tracking-tight sm:text-4xl">
+          {pr.title}
+        </h1>
         <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
           <span className="inline-flex items-center gap-2">
             <Avatar className="size-6">
@@ -140,7 +143,8 @@ export default async function PullRequestDetailPage({
             {pr.sourceBranch} → {pr.targetBranch}
           </span>
         </div>
-      </div>
+        </div>
+      </section>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <MetaCard
@@ -173,7 +177,7 @@ export default async function PullRequestDetailPage({
         />
       </div>
 
-      <Card className="border-border/80 bg-card/80 shadow-none">
+      <Card className="shadow-none">
         <CardHeader>
           <CardTitle className="text-base">Description</CardTitle>
           <CardDescription>
@@ -183,7 +187,7 @@ export default async function PullRequestDetailPage({
         </CardHeader>
         <CardContent>
           {pr.description?.trim() ? (
-            <pre className="whitespace-pre-wrap rounded-lg border border-border/70 bg-background/50 p-4 font-sans text-sm leading-relaxed text-foreground">
+            <pre className="whitespace-pre-wrap rounded-2xl border border-border/70 bg-muted/20 p-4 font-sans text-sm leading-relaxed text-foreground">
               {pr.description}
             </pre>
           ) : (
@@ -192,7 +196,7 @@ export default async function PullRequestDetailPage({
         </CardContent>
       </Card>
 
-      <Card className="border-border/80 bg-card/80 shadow-none">
+      <Card className="shadow-none">
         <CardHeader>
           <CardTitle className="text-base">Ingestion history</CardTitle>
           <CardDescription>
@@ -204,10 +208,7 @@ export default async function PullRequestDetailPage({
             <p className="text-sm text-muted-foreground">No events recorded yet.</p>
           ) : (
             pr.events.map((event) => (
-              <div
-                key={event.id}
-                className="rounded-lg border border-border/70 bg-background/40 px-3 py-2"
-              >
+              <div key={event.id} className="rounded-2xl border border-border/70 bg-card/70 px-3 py-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-mono text-xs font-medium text-brand">
                     {event.eventType}
@@ -248,8 +249,8 @@ function MetaCard({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-border/70 bg-card/60 p-4">
-      <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+    <div className="rounded-2xl border border-border/70 bg-card/70 p-4">
+      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
         {label}
       </p>
       <p

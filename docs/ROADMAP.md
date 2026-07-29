@@ -6,13 +6,13 @@
 
 ## Principles
 
-| Principle | Reason |
-| --- | --- |
-| Foundations first | Auth, repos, PRs before analysis |
-| Deterministic before LLM | Facts first; AI explains |
-| Free-tier friendly | No paid AI required for core demo |
-| Modular monolith | Avoid premature distribution |
-| Human in the loop | No silent auto-merge until deliberate |
+| Principle                | Reason                                |
+| ------------------------ | ------------------------------------- |
+| Foundations first        | Auth, repos, PRs before analysis      |
+| Deterministic before LLM | Facts first; AI explains              |
+| Free-tier friendly       | No paid AI required for core demo     |
+| Modular monolith         | Avoid premature distribution          |
+| Human in the loop        | No silent auto-merge until deliberate |
 
 ---
 

@@ -57,9 +57,9 @@ Teams need a durable **scope–impact–risk** layer between agent output and me
 
 ## 5. Users
 
-| Priority | Audience |
-| --- | --- |
-| Primary | Developers and small teams using IDE/repo agents |
+| Priority  | Audience                                             |
+| --------- | ---------------------------------------------------- |
+| Primary   | Developers and small teams using IDE/repo agents     |
 | Secondary | Maintainers, eng managers, platform/security (later) |
 
 ---
@@ -120,29 +120,29 @@ Teams need a durable **scope–impact–risk** layer between agent output and me
 
 ## 7. Non-functional requirements
 
-| Area | Requirement |
-| --- | --- |
-| Architecture | Modular Next.js monolith |
-| Security | Server-only secrets; webhook HMAC; RLS |
-| Explainability | Findings + evidence + decision trace |
-| Cost | Free-tier AI path; bounded context |
-| Reliability | Idempotent webhooks; controlled analysis failures |
-| UX | Infrastructure aesthetic; PR analysis as primary surface |
+| Area           | Requirement                                              |
+| -------------- | -------------------------------------------------------- |
+| Architecture   | Modular Next.js monolith                                 |
+| Security       | Server-only secrets; webhook HMAC; RLS                   |
+| Explainability | Findings + evidence + decision trace                     |
+| Cost           | Free-tier AI path; bounded context                       |
+| Reliability    | Idempotent webhooks; controlled analysis failures        |
+| UX             | Infrastructure aesthetic; PR analysis as primary surface |
 
 ---
 
 ## 8. Feature status (v0.3.0)
 
-| Area | Status |
-| --- | --- |
-| Landing + design system | Yes |
-| GitHub OAuth + App + webhooks | Yes |
-| PR list/detail + import | Yes |
-| Analysis + OpenRouter free model | Yes |
-| Decision + trust UX | Yes |
-| Scope & Consistency Analysis | Yes |
-| Auto merge/block on GitHub | No |
-| Job queue for analysis | No (inline request) |
+| Area                             | Status              |
+| -------------------------------- | ------------------- |
+| Landing + design system          | Yes                 |
+| GitHub OAuth + App + webhooks    | Yes                 |
+| PR list/detail + import          | Yes                 |
+| Analysis + OpenRouter free model | Yes                 |
+| Decision + trust UX              | Yes                 |
+| Scope & Consistency Analysis     | Yes                 |
+| Auto merge/block on GitHub       | No                  |
+| Job queue for analysis           | No (inline request) |
 
 ---
 

@@ -1,7 +1,7 @@
 # Stage 3 — Scope & Consistency Analysis — Implementation Report
 
 **Branch:** `stage/3-intent-scope-analysis`
-**Goal:** Understand *why* a PR exists and whether the implementation matches that intent—without removing Stage 2 analysis.
+**Goal:** Understand _why_ a PR exists and whether the implementation matches that intent—without removing Stage 2 analysis.
 
 ---
 
@@ -25,13 +25,13 @@ AI is **not required** for Stage 3 signals. Existing Stage 2 findings, decision 
 
 ### 1. Task extraction
 
-| Source | How |
-| --- | --- |
-| PR title | Primary summary (conventional-commit prefix stripped) |
-| PR description | First meaningful line when title is weak |
-| Linked issues | `#N` / `closes #N` parsed; issue title fetched via GitHub App |
-| Commit messages | Compare + PR commits list (first line each) |
-| Branch name | Fallback when other signals are empty |
+| Source          | How                                                           |
+| --------------- | ------------------------------------------------------------- |
+| PR title        | Primary summary (conventional-commit prefix stripped)         |
+| PR description  | First meaningful line when title is weak                      |
+| Linked issues   | `#N` / `closes #N` parsed; issue title fetched via GitHub App |
+| Commit messages | Compare + PR commits list (first line each)                   |
+| Branch name     | Fallback when other signals are empty                         |
 
 **Output:** one-line `taskSummary` + `taskSources[]` with excerpts.
 
@@ -47,13 +47,13 @@ Primary + optional secondary labels.
 
 Compares **expected areas** (from classification + intent keywords) to **actual file categories**.
 
-| `scopeMatch` | Meaning |
-| --- | --- |
-| `matches` | Implementation aligns with stated task |
-| `partial` | Some expected areas hit; gaps remain |
-| `exceeds` | Related work plus clear out-of-scope files |
-| `unrelated` | Changes largely do not match the claim |
-| `unknown` | Insufficient signals |
+| `scopeMatch` | Meaning                                    |
+| ------------ | ------------------------------------------ |
+| `matches`    | Implementation aligns with stated task     |
+| `partial`    | Some expected areas hit; gaps remain       |
+| `exceeds`    | Related work plus clear out-of-scope files |
+| `unrelated`  | Changes largely do not match the claim     |
+| `unknown`    | Insufficient signals                       |
 
 ### 4. Scope creep
 
@@ -114,16 +114,16 @@ AI findings (Stage 2) → calibrate → merge decision (2.6 + scope)
 persist deterministic_result.intentScope + scope_score/classification
 ```
 
-| Module | Role |
-| --- | --- |
-| `scope/extract-task.ts` | Task summary + sources |
-| `scope/classify-pr.ts` | PR type classification |
-| `scope/verify-scope.ts` | Match, creep, missing work, coverage |
-| `scope/collect-intent.ts` | Commits + linked issues via Octokit |
-| `scope/index.ts` | `analyzeIntentAndScope` public API |
-| `orchestrator.ts` | Runs Stage 3 after collect |
-| `services/analyses.ts` | Persist + load `intentScope` |
-| `analysis-panel.tsx` | Scope & Consistency Analysis section |
+| Module                    | Role                                 |
+| ------------------------- | ------------------------------------ |
+| `scope/extract-task.ts`   | Task summary + sources               |
+| `scope/classify-pr.ts`    | PR type classification               |
+| `scope/verify-scope.ts`   | Match, creep, missing work, coverage |
+| `scope/collect-intent.ts` | Commits + linked issues via Octokit  |
+| `scope/index.ts`          | `analyzeIntentAndScope` public API   |
+| `orchestrator.ts`         | Runs Stage 3 after collect           |
+| `services/analyses.ts`    | Persist + load `intentScope`         |
+| `analysis-panel.tsx`      | Scope & Consistency Analysis section |
 
 ### Persistence (backward compatible)
 
@@ -139,15 +139,15 @@ No breaking schema migration required for UI; existing Stage 2 rows still load.
 
 ## Acceptance checklist
 
-| Criterion | Status |
-| --- | --- |
-| Task extracted | Done |
-| Scope classified | Done |
-| Scope creep detected | Done |
-| Missing work detected | Done |
-| Coverage estimated | Done |
-| Intent section visible | Done |
-| Existing analysis preserved | Done |
+| Criterion                   | Status |
+| --------------------------- | ------ |
+| Task extracted              | Done   |
+| Scope classified            | Done   |
+| Scope creep detected        | Done   |
+| Missing work detected       | Done   |
+| Coverage estimated          | Done   |
+| Intent section visible      | Done   |
+| Existing analysis preserved | Done   |
 
 ---
 

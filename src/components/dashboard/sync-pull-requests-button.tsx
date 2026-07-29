@@ -55,6 +55,7 @@ export function SyncPullRequestsButton({
     <div className="space-y-2">
       <Button
         type="button"
+        variant="outline"
         disabled={loading}
         onClick={() => {
           void onSync();

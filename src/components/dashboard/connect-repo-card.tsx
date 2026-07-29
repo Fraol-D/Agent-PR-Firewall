@@ -20,10 +20,10 @@ export function ConnectRepoCard() {
   const configured = isGitHubAppConfigured();
 
   return (
-    <Card className="overflow-hidden border-border/80 bg-card/80 shadow-none">
-      <CardHeader className="border-b border-border/60 bg-muted/20">
+    <Card className="overflow-hidden shadow-none">
+      <CardHeader className="border-b border-border/70 bg-muted/20">
         <div className="flex items-start gap-3">
-          <div className="flex size-10 items-center justify-center rounded-xl bg-brand-muted text-brand">
+          <div className="flex size-10 items-center justify-center rounded-xl border border-border/70 bg-background/70 text-foreground">
             <ShieldCheck className="size-5" />
           </div>
           <div className="space-y-1">
@@ -35,10 +35,10 @@ export function ConnectRepoCard() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4 p-6">
+      <CardContent className="space-y-5 p-6">
         <ol className="space-y-3 text-sm text-muted-foreground">
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-background font-mono text-[11px] text-foreground">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background font-mono text-[11px] text-foreground">
               1
             </span>
             <span>
@@ -46,7 +46,7 @@ export function ConnectRepoCard() {
             </span>
           </li>
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-background font-mono text-[11px] text-foreground">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background font-mono text-[11px] text-foreground">
               2
             </span>
             <span>
@@ -54,7 +54,7 @@ export function ConnectRepoCard() {
             </span>
           </li>
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-background font-mono text-[11px] text-foreground">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background font-mono text-[11px] text-foreground">
               3
             </span>
             <span>
@@ -88,7 +88,7 @@ export function ConnectRepoCard() {
         </div>
 
         {!configured ? (
-          <p className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <p className="rounded-2xl border border-dashed border-border/70 bg-muted/25 px-3 py-3 text-xs leading-relaxed text-muted-foreground">
             Server needs{" "}
             <code className="font-mono text-[11px] text-foreground">
               GITHUB_APP_ID

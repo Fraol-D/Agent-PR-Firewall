@@ -10,10 +10,10 @@ const labels: Record<RepositoryConnectionStatus, string> = {
 };
 
 const styles: Record<RepositoryConnectionStatus, string> = {
-  connected: "bg-risk-low/20 text-risk-low-foreground border-transparent",
-  pending: "bg-risk-review/20 text-risk-review-foreground border-transparent",
-  error: "bg-risk-blocked/20 text-risk-blocked-foreground border-transparent",
-  disconnected: "bg-muted text-muted-foreground border-transparent",
+  connected: "bg-risk-low/15 text-risk-low-foreground border-transparent",
+  pending: "bg-risk-review/15 text-risk-review-foreground border-transparent",
+  error: "bg-risk-blocked/15 text-risk-blocked-foreground border-transparent",
+  disconnected: "bg-muted/80 text-muted-foreground border-transparent",
 };
 
 export function ConnectionStatusBadge({

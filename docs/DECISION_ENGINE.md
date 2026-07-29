@@ -11,11 +11,11 @@ The recommendation is **advisory**—it does not block GitHub merges.
 
 ## 1. Outputs
 
-| UI label | Internal `MergeDecision` | Stored `overall_status` |
-| --- | --- | --- |
-| **Safe to merge** | `safe_to_merge` | `no_significant_concerns` |
-| **Review recommended** | `review_recommended` | `review_recommended` |
-| **Block merge** | `block_merge` | `high_risk_concerns` |
+| UI label               | Internal `MergeDecision` | Stored `overall_status`   |
+| ---------------------- | ------------------------ | ------------------------- |
+| **Safe to merge**      | `safe_to_merge`          | `no_significant_concerns` |
+| **Review recommended** | `review_recommended`     | `review_recommended`      |
+| **Block merge**        | `block_merge`            | `high_risk_concerns`      |
 
 Also shown:
 
@@ -46,12 +46,12 @@ Evaluated in order (first matching “block” or “review” band wins for tha
 
 If **any** of:
 
-| Signal | Definition |
-| --- | --- |
-| Critical finding | Any finding with `severity === "critical"` |
-| High security/auth | `severity === "high"` and category `SECURITY` or `AUTHENTICATION` |
-| Secret / credential language | Title/summary/explanation/evidence match secret-like patterns |
-| Destructive migration | `DATABASE` + high severity + drop/truncate/destructive language |
+| Signal                       | Definition                                                        |
+| ---------------------------- | ----------------------------------------------------------------- |
+| Critical finding             | Any finding with `severity === "critical"`                        |
+| High security/auth           | `severity === "high"` and category `SECURITY` or `AUTHENTICATION` |
+| Secret / credential language | Title/summary/explanation/evidence match secret-like patterns     |
+| Destructive migration        | `DATABASE` + high severity + drop/truncate/destructive language   |
 
 **Example primary reasons:**
 
@@ -64,14 +64,14 @@ If **any** of:
 
 If not blocked, and **any** of:
 
-| Signal | Definition |
-| --- | --- |
-| Medium+ findings | Count of medium/high/critical > 0, or max severity high |
-| Sensitive touch | Deterministic sensitive areas include Auth/DB/Infra, or medium+ finding in AUTH/DB/API/SECURITY |
-| Low confidence | Average calibrated confidence &lt; 0.55 with ≥1 finding |
-| Scope unrelated | Stage 3 `scopeMatch === "unrelated"` |
-| Scope creep / exceeds | `scopeCreepDetected` or `scopeMatch === "exceeds"` |
-| Weak coverage | Stage 3 `coverage === "low"` |
+| Signal                | Definition                                                                                      |
+| --------------------- | ----------------------------------------------------------------------------------------------- |
+| Medium+ findings      | Count of medium/high/critical > 0, or max severity high                                         |
+| Sensitive touch       | Deterministic sensitive areas include Auth/DB/Infra, or medium+ finding in AUTH/DB/API/SECURITY |
+| Low confidence        | Average calibrated confidence &lt; 0.55 with ≥1 finding                                         |
+| Scope unrelated       | Stage 3 `scopeMatch === "unrelated"`                                                            |
+| Scope creep / exceeds | `scopeCreepDetected` or `scopeMatch === "exceeds"`                                              |
+| Weak coverage         | Stage 3 `coverage === "low"`                                                                    |
 
 **Example primary reasons:**
 
@@ -85,11 +85,11 @@ If not blocked, and **any** of:
 
 If not blocked/reviewed:
 
-| Case | Reason pattern |
-| --- | --- |
-| Documentation-only change | All files classified as docs; no security/runtime risks from rules above |
-| No findings | No structured findings (unless AI overall was high-risk → forced to review) |
-| Info/low only | Only informational/low findings remain |
+| Case                      | Reason pattern                                                              |
+| ------------------------- | --------------------------------------------------------------------------- |
+| Documentation-only change | All files classified as docs; no security/runtime risks from rules above    |
+| No findings               | No structured findings (unless AI overall was high-risk → forced to review) |
+| Info/low only             | Only informational/low findings remain                                      |
 
 Docs-only is detected by file category + path patterns (`README`, `docs/`, `*.md`, …).
 
@@ -106,14 +106,14 @@ Applied **per finding** after AI returns raw confidence.
 2. Hard cap at **0.95**.
 3. Multiplicative adjustments:
 
-| Condition | Factor |
-| --- | --- |
-| `isInference` | × 0.85 |
-| Weak/empty evidence | × 0.70 |
-| Evidence mentions a real analyzed path | × 1.05 (then re-cap) |
-| No valid `affectedFiles` | × 0.75 |
-| &gt;50% files excluded from AI | × 0.90 |
-| Truncated patches in context | × 0.92 |
+| Condition                                         | Factor               |
+| ------------------------------------------------- | -------------------- |
+| `isInference`                                     | × 0.85               |
+| Weak/empty evidence                               | × 0.70               |
+| Evidence mentions a real analyzed path            | × 1.05 (then re-cap) |
+| No valid `affectedFiles`                          | × 0.75               |
+| &gt;50% files excluded from AI                    | × 0.90               |
+| Truncated patches in context                      | × 0.92               |
 | Category aligns with deterministic sensitive area | × 1.04 (then re-cap) |
 
 4. Floor **0.05**, clamp to `[0.05, 0.95]`, round to 3 decimals.
@@ -138,12 +138,12 @@ Overall reason examples:
 
 Compact checklist items with tones:
 
-| Tone | Meaning |
-| --- | --- |
+| Tone     | Meaning               |
+| -------- | --------------------- |
 | positive | Supporting safe merge |
-| warning | Needs attention |
-| negative | Blocking / severe |
-| neutral | Informational |
+| warning  | Needs attention       |
+| negative | Blocking / severe     |
+| neutral  | Informational         |
 
 Typical items:
 
@@ -175,24 +175,24 @@ Full intent engine: `src/lib/analysis/scope/`, [`STAGE_3_REPORT.md`](./STAGE_3_R
 
 ## 7. What this is not (yet)
 
-| Not included in v0.3.0 | Stage |
-| --- | --- |
-| Configurable org policies | 4 |
-| Hard GitHub Checks / branch protection | 4–5 |
-| Human override audit log | 4 |
-| Separate impact scoring engine | 4 |
-| Auto-merge | Never without explicit product decision |
+| Not included in v0.3.0                 | Stage                                   |
+| -------------------------------------- | --------------------------------------- |
+| Configurable org policies              | 4                                       |
+| Hard GitHub Checks / branch protection | 4–5                                     |
+| Human override audit log               | 4                                       |
+| Separate impact scoring engine         | 4                                       |
+| Auto-merge                             | Never without explicit product decision |
 
 ---
 
 ## 8. Acceptance tests for decisions
 
-| Scenario | Expected decision band |
-| --- | --- |
-| Docs-only README PR, info findings | Safe to merge |
-| Medium reliability finding | Review recommended |
-| Critical security finding | Block merge |
-| Docs title + auth/DB files | Review (scope creep) |
-| Stuck analysis | Failed (not endless review) |
+| Scenario                           | Expected decision band      |
+| ---------------------------------- | --------------------------- |
+| Docs-only README PR, info findings | Safe to merge               |
+| Medium reliability finding         | Review recommended          |
+| Critical security finding          | Block merge                 |
+| Docs title + auth/DB files         | Review (scope creep)        |
+| Stuck analysis                     | Failed (not endless review) |
 
 See [`TESTING.md`](./TESTING.md).

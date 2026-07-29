@@ -41,45 +41,49 @@ export default async function PullRequestsPage({
   const selectedRepo = repositories.find((r) => r.id === params.repository);
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h2 className="text-lg font-semibold tracking-tight">Pull requests</h2>
-          <p className="text-sm text-muted-foreground">
-            Real pull requests ingested from connected GitHub repositories.
-            Analysis arrives in Stage 2+.
-          </p>
-          {selectedRepo ? (
-            <p className="text-xs text-muted-foreground">
-              Filtered to{" "}
-              <span className="font-mono text-foreground">
-                {selectedRepo.fullName}
-              </span>{" "}
-              ·{" "}
-              <Link
-                href="/dashboard/pull-requests"
-                className="text-brand hover:underline"
-              >
-                Clear filter
-              </Link>
+    <div className="flex flex-col gap-6">
+      <section className="surface rounded-3xl px-5 py-5 sm:px-6 sm:py-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl space-y-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Pull requests
             </p>
-          ) : null}
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              Agent PR intake
+            </h2>
+            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+              Real pull requests ingested from connected GitHub repositories.
+              Analysis arrives in Stage 2+.
+            </p>
+            {selectedRepo ? (
+              <p className="text-xs text-muted-foreground">
+                Filtered to{" "}
+                <span className="font-mono text-foreground">
+                  {selectedRepo.fullName}
+                </span>{" "}
+                ·{" "}
+                <Link
+                  href="/dashboard/pull-requests"
+                  className="font-medium text-foreground hover:underline"
+                >
+                  Clear filter
+                </Link>
+              </p>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {repositories.length > 0 ? (
+              <SyncPullRequestsButton repositoryId={params.repository} />
+            ) : null}
+            <Button variant="outline" render={<Link href="/dashboard/repositories" />}>
+              Manage repositories
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {repositories.length > 0 ? (
-            <SyncPullRequestsButton repositoryId={params.repository} />
-          ) : null}
-          <Button
-            variant="outline"
-            render={<Link href="/dashboard/repositories" />}
-          >
-            Manage repositories
-          </Button>
-        </div>
-      </div>
+      </section>
 
       {!prsResult.ok ? (
-        <Card className="border-destructive/30 bg-destructive/5 shadow-none">
+        <Card className="shadow-none">
           <CardHeader>
             <div className="flex items-start gap-3">
               <AlertTriangle className="size-5 text-destructive" />
@@ -97,10 +101,10 @@ export default async function PullRequestsPage({
       ) : null}
 
       {prsResult.ok && repositories.length === 0 ? (
-        <Card className="border-border/80 bg-card/80 shadow-none">
+        <Card className="shadow-none">
           <CardHeader>
             <div className="flex items-start gap-3">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+              <div className="flex size-10 items-center justify-center rounded-xl border border-border/70 bg-muted/50 text-foreground">
                 <GitPullRequest className="size-5" />
               </div>
               <div>
@@ -121,10 +125,10 @@ export default async function PullRequestsPage({
       ) : null}
 
       {prsResult.ok && repositories.length > 0 && pullRequests.length === 0 ? (
-        <Card className="border-border/80 bg-card/80 shadow-none">
+        <Card className="shadow-none">
           <CardHeader>
             <div className="flex items-start gap-3">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+              <div className="flex size-10 items-center justify-center rounded-xl border border-border/70 bg-muted/50 text-foreground">
                 <GitPullRequest className="size-5" />
               </div>
               <div className="space-y-3">

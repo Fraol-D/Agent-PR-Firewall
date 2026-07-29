@@ -25,27 +25,24 @@ export function PullRequestRow({ pr }: { pr: PullRequestListItem }) {
   const updated = pr.githubUpdatedAt ?? pr.updatedAt;
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="group flex flex-col gap-4 rounded-2xl border border-border/70 bg-card/70 p-4 transition-colors hover:border-border hover:bg-card sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-start gap-3">
-        <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-muted text-brand">
+        <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-muted/60 text-foreground">
           <GitPullRequest className="size-4" />
         </div>
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href={`/dashboard/pull-requests/${pr.id}`}
-              className="truncate text-sm font-semibold hover:text-brand"
-            >
+            <Link href={`/dashboard/pull-requests/${pr.id}`} className="truncate text-sm font-semibold tracking-tight hover:text-brand">
               {pr.title}
             </Link>
             <PrStatusBadge status={pr.status} />
           </div>
-          <p className="text-xs text-muted-foreground">
-            <span className="font-mono">{pr.repositoryFullName}</span>
-            {" · "}
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            <span className="font-mono text-foreground/90">{pr.repositoryFullName}</span>
+            <span>·</span>
             <span className="font-mono">#{pr.number}</span>
-            {" · "}
-            <span className="font-mono">
+            <span>·</span>
+            <span className="font-mono text-foreground/90">
               {pr.sourceBranch} → {pr.targetBranch}
             </span>
           </p>
@@ -68,7 +65,7 @@ export function PullRequestRow({ pr }: { pr: PullRequestListItem }) {
       <div className="flex shrink-0 items-center gap-2 sm:flex-col sm:items-end">
         <Link
           href={`/dashboard/pull-requests/${pr.id}`}
-          className="text-xs font-medium text-brand hover:underline"
+          className="text-xs font-medium text-foreground/80 hover:text-foreground"
         >
           View details
         </Link>

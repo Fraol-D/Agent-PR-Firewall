@@ -34,14 +34,14 @@
 
 ## 2. Separation of concerns
 
-| Concern | Mechanism |
-| --- | --- |
-| Who is the user? | Supabase Auth · GitHub OAuth |
-| Which repos can we read? | GitHub App installation |
-| Where is state? | Supabase Postgres + RLS |
-| What changed? | Deterministic GitHub compare (SHA-pinned) |
-| Why did it change? | Stage 3 Scope & Consistency Analysis engine |
-| What should reviewer care about? | Decision Engine + AI findings |
+| Concern                          | Mechanism                                   |
+| -------------------------------- | ------------------------------------------- |
+| Who is the user?                 | Supabase Auth · GitHub OAuth                |
+| Which repos can we read?         | GitHub App installation                     |
+| Where is state?                  | Supabase Postgres + RLS                     |
+| What changed?                    | Deterministic GitHub compare (SHA-pinned)   |
+| Why did it change?               | Stage 3 Scope & Consistency Analysis engine |
+| What should reviewer care about? | Decision Engine + AI findings               |
 
 **Never** conflate user OAuth with App install tokens.
 
@@ -49,11 +49,11 @@
 
 ## 3. Frontend
 
-| Item | Choice |
-| --- | --- |
-| Framework | Next.js App Router |
-| UI | Tailwind v4, shadcn/Base UI, Lucide |
-| Primary surface | PR detail → `AnalysisPanel` |
+| Item            | Choice                              |
+| --------------- | ----------------------------------- |
+| Framework       | Next.js App Router                  |
+| UI              | Tailwind v4, shadcn/Base UI, Lucide |
+| Primary surface | PR detail → `AnalysisPanel`         |
 
 Pages: `/`, `/login`, `/dashboard/*` (overview, repositories, pull requests, settings).
 
@@ -67,31 +67,31 @@ Presentational components stay thin; loaders/APIs own data.
 
 All inside Next.js (no separate API service).
 
-| Pattern | Location |
-| --- | --- |
-| Route handlers | `src/app/api/github/*`, `src/app/api/analysis/*` |
-| Services | `src/services/*` |
-| Analysis engine | `src/lib/analysis/*` |
-| Auth helpers | `src/lib/auth/*` |
-| Middleware | Session refresh; protect `/dashboard` |
+| Pattern         | Location                                         |
+| --------------- | ------------------------------------------------ |
+| Route handlers  | `src/app/api/github/*`, `src/app/api/analysis/*` |
+| Services        | `src/services/*`                                 |
+| Analysis engine | `src/lib/analysis/*`                             |
+| Auth helpers    | `src/lib/auth/*`                                 |
+| Middleware      | Session refresh; protect `/dashboard`            |
 
 ---
 
 ## 5. Supabase
 
-| Client | Use |
-| --- | --- |
-| Browser / server user | RLS-scoped reads |
+| Client                 | Use                                          |
+| ---------------------- | -------------------------------------------- |
+| Browser / server user  | RLS-scoped reads                             |
 | Service role (`admin`) | Webhooks, analysis writes, stale job healing |
 
 Migrations (apply in order):
 
-| File | Purpose |
-| --- | --- |
-| `001_initial_schema.sql` | Core entities + RLS + tasks + analyses |
-| `002_stage1_github_integration.sql` | Connection status, webhook deliveries |
-| `003_stage2_analysis_pipeline.sql` | Findings / changed files fields |
-| `004_stage2_5_hardening.sql` | `duration_ms`, `complete_analysis_atomic` |
+| File                                | Purpose                                   |
+| ----------------------------------- | ----------------------------------------- |
+| `001_initial_schema.sql`            | Core entities + RLS + tasks + analyses    |
+| `002_stage1_github_integration.sql` | Connection status, webhook deliveries     |
+| `003_stage2_analysis_pipeline.sql`  | Findings / changed files fields           |
+| `004_stage2_5_hardening.sql`        | `duration_ms`, `complete_analysis_atomic` |
 
 ---
 
@@ -102,13 +102,13 @@ Migrations (apply in order):
 
 Routes:
 
-| Route | Role |
-| --- | --- |
-| `GET /api/github/install` | Start install |
-| `GET /api/github/setup` | Post-install callback |
-| `POST /api/github/webhooks` | HMAC-verified events |
-| `POST /api/github/sync` | Recover installations |
-| `POST /api/github/sync-pull-requests` | Import PRs |
+| Route                                 | Role                  |
+| ------------------------------------- | --------------------- |
+| `GET /api/github/install`             | Start install         |
+| `GET /api/github/setup`               | Post-install callback |
+| `POST /api/github/webhooks`           | HMAC-verified events  |
+| `POST /api/github/sync`               | Recover installations |
+| `POST /api/github/sync-pull-requests` | Import PRs            |
 
 ---
 
@@ -133,18 +133,18 @@ UI polls GET /api/analysis/:id (capped; stale jobs healed)
 
 ### Modules (`src/lib/analysis`)
 
-| Module | Role |
-| --- | --- |
-| `collect-changes.ts` | SHA-pinned GitHub compare |
-| `scope/*` | Task extract, classify, match, creep, coverage |
-| `classify.ts` | Deterministic file categories |
-| `filters.ts` / `build-context.ts` | Exclusions, redaction, budget |
-| `ai/*` | Providers (OpenRouter default, Gemini optional) |
-| `confidence.ts` | Calibration + reasons |
-| `decision.ts` | Merge recommendation + trace |
-| `evidence.ts` | Structured evidence for UI |
-| `orchestrator.ts` | End-to-end run |
-| `log.ts` | Structured server logs |
+| Module                            | Role                                            |
+| --------------------------------- | ----------------------------------------------- |
+| `collect-changes.ts`              | SHA-pinned GitHub compare                       |
+| `scope/*`                         | Task extract, classify, match, creep, coverage  |
+| `classify.ts`                     | Deterministic file categories                   |
+| `filters.ts` / `build-context.ts` | Exclusions, redaction, budget                   |
+| `ai/*`                            | Providers (OpenRouter default, Gemini optional) |
+| `confidence.ts`                   | Calibration + reasons                           |
+| `decision.ts`                     | Merge recommendation + trace                    |
+| `evidence.ts`                     | Structured evidence for UI                      |
+| `orchestrator.ts`                 | End-to-end run                                  |
+| `log.ts`                          | Structured server logs                          |
 
 ### Persistence model
 
@@ -207,13 +207,13 @@ secrets/                 # local PEMs (gitignored)
 
 ## 11. Known architectural debt
 
-| Item | Note |
-| --- | --- |
-| Inline analysis | No queue; request can run up to ~300s |
-| Free models | Rate limits; enum sloppiness mitigated by normalize |
-| DB types | Hand-maintained (`src/types/database.ts`) |
-| Stage 4+ | Policy engine / GitHub Checks not productized |
-| Middleware | Next.js may rename convention to “proxy” |
+| Item            | Note                                                |
+| --------------- | --------------------------------------------------- |
+| Inline analysis | No queue; request can run up to ~300s               |
+| Free models     | Rate limits; enum sloppiness mitigated by normalize |
+| DB types        | Hand-maintained (`src/types/database.ts`)           |
+| Stage 4+        | Policy engine / GitHub Checks not productized       |
+| Middleware      | Next.js may rename convention to “proxy”            |
 
 ---
 

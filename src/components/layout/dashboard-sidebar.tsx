@@ -51,16 +51,16 @@ export function DashboardSidebar({ className }: { className?: string }) {
               key={item.href}
               href={item.href}
               className={cn(
-                "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+                "group flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2.5 text-sm transition-colors",
                 active
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+                  ? "border-sidebar-border bg-sidebar-accent/80 text-sidebar-accent-foreground shadow-sm"
+                  : "text-muted-foreground hover:border-sidebar-border hover:bg-sidebar-accent/50 hover:text-foreground",
               )}
             >
               <Icon
                 className={cn(
                   "size-4 shrink-0",
-                  active ? "text-brand" : "text-muted-foreground group-hover:text-foreground",
+                  active ? "text-foreground" : "text-muted-foreground group-hover:text-foreground",
                 )}
               />
               <span className="font-medium">{item.title}</span>
@@ -69,10 +69,10 @@ export function DashboardSidebar({ className }: { className?: string }) {
         })}
       </nav>
       <div className="border-t border-sidebar-border p-3">
-        <div className="rounded-lg border border-border/80 bg-card/40 p-3">
-          <p className="text-xs font-medium text-foreground">Stage 0 foundation</p>
+        <div className="rounded-2xl border border-border/70 bg-card/70 p-3">
+          <p className="text-xs font-medium text-foreground">Agent PR Firewall</p>
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            Connect a repository to prepare for PR analysis in later stages.
+            Monitor scope, consistency, and risk across autonomous PRs.
           </p>
         </div>
       </div>

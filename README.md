@@ -43,15 +43,15 @@ Analysis is **manual** in v0.3.0 (no silent auto-merge or required status checks
 
 ## Features
 
-| Area | Capability |
-| --- | --- |
-| **GitHub** | App install, webhooks, PR import without a tunnel |
-| **Analysis** | SHA-pinned diffs, file classification, bounded AI context |
-| **Findings** | Structured severity/category cards with evidence |
-| **Decision Engine** | Safe to merge · Review recommended · Block merge |
-| **Scope & Consistency Analysis** | Task extraction, classification, creep, coverage, missing work |
-| **Trust UX** | Decision trace, confidence reasons, progress steps, notifications |
-| **Cost** | Default free OpenRouter model (`cohere/north-mini-code:free`) |
+| Area                             | Capability                                                        |
+| -------------------------------- | ----------------------------------------------------------------- |
+| **GitHub**                       | App install, webhooks, PR import without a tunnel                 |
+| **Analysis**                     | SHA-pinned diffs, file classification, bounded AI context         |
+| **Findings**                     | Structured severity/category cards with evidence                  |
+| **Decision Engine**              | Safe to merge · Review recommended · Block merge                  |
+| **Scope & Consistency Analysis** | Task extraction, classification, creep, coverage, missing work    |
+| **Trust UX**                     | Decision trace, confidence reasons, progress steps, notifications |
+| **Cost**                         | Default free OpenRouter model (`cohere/north-mini-code:free`)     |
 
 ---
 
@@ -59,13 +59,13 @@ Analysis is **manual** in v0.3.0 (no silent auto-merge or required status checks
 
 > Place real captures under `docs/images/` when available.
 
-| Surface | Placeholder |
-| --- | --- |
-| Landing | `docs/images/landing.png` |
-| Dashboard | `docs/images/dashboard.png` |
-| PR analysis — decision | `docs/images/analysis-decision.png` |
-| PR analysis — intent & scope | `docs/images/analysis-intent.png` |
-| Findings | `docs/images/analysis-findings.png` |
+| Surface                      | Placeholder                         |
+| ---------------------------- | ----------------------------------- |
+| Landing                      | `docs/images/landing.png`           |
+| Dashboard                    | `docs/images/dashboard.png`         |
+| PR analysis — decision       | `docs/images/analysis-decision.png` |
+| PR analysis — intent & scope | `docs/images/analysis-intent.png`   |
+| Findings                     | `docs/images/analysis-findings.png` |
 
 ---
 
@@ -129,20 +129,20 @@ Open `http://localhost:3000` → sign in → connect a repo → import PRs → a
 
 Copy from [`.env.example`](.env.example). Never commit `.env.local` or PEM keys.
 
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `NEXT_PUBLIC_APP_URL` | Yes | App origin (`http://localhost:3000` or tunnel) |
-| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Public anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes (server) | Webhooks + analysis writes |
-| `GITHUB_APP_ID` | Yes | GitHub App ID |
-| `GITHUB_APP_SLUG` | Yes | App slug for install URL |
-| `GITHUB_APP_PRIVATE_KEY_PATH` | Yes* | Path to App PEM (preferred) |
-| `GITHUB_APP_PRIVATE_KEY` | Alt | Full PEM if not using path |
-| `GITHUB_APP_WEBHOOK_SECRET` | Yes | HMAC for webhooks |
-| `OPENROUTER_API_KEY` | Yes for analysis | Server-only AI key |
-| `OPENROUTER_MODEL` | Optional | Default `cohere/north-mini-code:free` |
-| `AI_PROVIDER` | Optional | `openrouter` (default) or `gemini` |
+| Variable                        | Required         | Purpose                                        |
+| ------------------------------- | ---------------- | ---------------------------------------------- |
+| `NEXT_PUBLIC_APP_URL`           | Yes              | App origin (`http://localhost:3000` or tunnel) |
+| `NEXT_PUBLIC_SUPABASE_URL`      | Yes              | Supabase project URL                           |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes              | Public anon key                                |
+| `SUPABASE_SERVICE_ROLE_KEY`     | Yes (server)     | Webhooks + analysis writes                     |
+| `GITHUB_APP_ID`                 | Yes              | GitHub App ID                                  |
+| `GITHUB_APP_SLUG`               | Yes              | App slug for install URL                       |
+| `GITHUB_APP_PRIVATE_KEY_PATH`   | Yes\*            | Path to App PEM (preferred)                    |
+| `GITHUB_APP_PRIVATE_KEY`        | Alt              | Full PEM if not using path                     |
+| `GITHUB_APP_WEBHOOK_SECRET`     | Yes              | HMAC for webhooks                              |
+| `OPENROUTER_API_KEY`            | Yes for analysis | Server-only AI key                             |
+| `OPENROUTER_MODEL`              | Optional         | Default `cohere/north-mini-code:free`          |
+| `AI_PROVIDER`                   | Optional         | `openrouter` (default) or `gemini`             |
 
 \* Prefer `secrets/github-app.pem` (gitignored).
 
@@ -153,13 +153,13 @@ Copy from [`.env.example`](.env.example). Never commit `.env.local` or PEM keys.
 1. Create a GitHub App: [Developer settings → GitHub Apps](https://github.com/settings/apps).
 2. Configure:
 
-| Field | Value |
-| --- | --- |
-| Homepage URL | `{APP_URL}` |
-| Setup URL | `{APP_URL}/api/github/setup` |
-| Webhook URL | `{APP_URL}/api/github/webhooks` |
-| Webhook secret | Same as `GITHUB_APP_WEBHOOK_SECRET` |
-| Redirect on update | Enabled |
+| Field              | Value                               |
+| ------------------ | ----------------------------------- |
+| Homepage URL       | `{APP_URL}`                         |
+| Setup URL          | `{APP_URL}/api/github/setup`        |
+| Webhook URL        | `{APP_URL}/api/github/webhooks`     |
+| Webhook secret     | Same as `GITHUB_APP_WEBHOOK_SECRET` |
+| Redirect on update | Enabled                             |
 
 3. **Permissions (repo):** Metadata read, Contents read, Pull requests read.
 4. **Events:** Installation, Installation repositories, Pull request.
@@ -201,32 +201,32 @@ See [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) and [`docs/TESTING.md`](docs/
 
 ## Documentation map
 
-| Doc | Contents |
-| --- | --- |
-| [`docs/PRD.md`](docs/PRD.md) | Product requirements |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System design |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Stages 0–6 |
-| [`docs/DECISION_ENGINE.md`](docs/DECISION_ENGINE.md) | Merge recommendation rules |
-| [`docs/TESTING.md`](docs/TESTING.md) | PR test scenarios |
-| [`docs/HANDOFF_STAGE3.md`](docs/HANDOFF_STAGE3.md) | Engineering handoff |
-| [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) | How to contribute |
-| [`docs/STAGE_3_REPORT.md`](docs/STAGE_3_REPORT.md) | Stage 3 implementation notes |
+| Doc                                                  | Contents                     |
+| ---------------------------------------------------- | ---------------------------- |
+| [`docs/PRD.md`](docs/PRD.md)                         | Product requirements         |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)       | System design                |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md)                 | Stages 0–6                   |
+| [`docs/DECISION_ENGINE.md`](docs/DECISION_ENGINE.md) | Merge recommendation rules   |
+| [`docs/TESTING.md`](docs/TESTING.md)                 | PR test scenarios            |
+| [`docs/HANDOFF_STAGE3.md`](docs/HANDOFF_STAGE3.md)   | Engineering handoff          |
+| [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md)       | How to contribute            |
+| [`docs/STAGE_3_REPORT.md`](docs/STAGE_3_REPORT.md)   | Stage 3 implementation notes |
 
 ---
 
 ## Roadmap (summary)
 
-| Stage | Status |
-| --- | --- |
-| 0 Foundation | Done |
-| 1 GitHub integration | Done |
-| 2 PR analysis pipeline | Done |
-| 2.5 Hardening | Done |
-| 2.6 UX & trust | Done |
-| 3 Scope & Consistency Analysis | Done (v0.3.0) |
-| 4 Decision engine productization | Next |
-| 5 Agent feedback loop | Planned |
-| 6 Portfolio polish | Planned |
+| Stage                            | Status        |
+| -------------------------------- | ------------- |
+| 0 Foundation                     | Done          |
+| 1 GitHub integration             | Done          |
+| 2 PR analysis pipeline           | Done          |
+| 2.5 Hardening                    | Done          |
+| 2.6 UX & trust                   | Done          |
+| 3 Scope & Consistency Analysis   | Done (v0.3.0) |
+| 4 Decision engine productization | Next          |
+| 5 Agent feedback loop            | Planned       |
+| 6 Portfolio polish               | Planned       |
 
 Details: [`docs/ROADMAP.md`](docs/ROADMAP.md)
 

@@ -382,17 +382,19 @@ export function AnalysisPanel({
   }, [analysis]);
 
   return (
-    <Card className="border-border/80 bg-card/80 shadow-none">
+    <Card className="shadow-none">
       <CardHeader className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <CardTitle className="text-base">Pull request analysis</CardTitle>
-            <CardDescription className="mt-1">
+            <CardDescription className="mt-1 max-w-2xl">
               Deterministic change collection plus AI-assisted findings with a
               clear merge recommendation.
             </CardDescription>
           </div>
-          <Badge variant="outline">{statusLabel(effectiveStatus)}</Badge>
+          <Badge variant="outline" className="font-medium">
+            {statusLabel(effectiveStatus)}
+          </Badge>
         </div>
 
         {currentHeadSha ? (
@@ -525,38 +527,34 @@ export function AnalysisPanel({
         ) : null}
 
         {effectiveStatus === "completed" && analysis ? (
-          <div className="space-y-5">
-            {/* Decision card */}
+          <div className="space-y-6">
             <section
               aria-label="Merge decision"
               className={cn(
-                "rounded-xl border p-4 transition-colors",
+                "rounded-3xl border p-5 transition-colors",
                 decisionMeta.shell,
               )}
             >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex items-start gap-4">
                   <decisionMeta.icon
-                    className="mt-0.5 size-6 shrink-0"
+                    className="mt-0.5 size-7 shrink-0"
                     aria-hidden
                   />
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-current/75">
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-current/75">
                       Decision
                     </p>
-                    <p className="mt-0.5 text-lg font-semibold tracking-tight">
+                    <p className="text-2xl font-semibold tracking-tight">
                       {decisionMeta.label}
                     </p>
-                    <p className="mt-1 max-w-2xl text-sm leading-relaxed text-current/90">
+                    <p className="max-w-2xl text-sm leading-relaxed text-current/90">
                       {primaryReason}
                     </p>
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1 text-right">
-                  <Badge
-                    variant="outline"
-                    className={cn(decisionMeta.badge)}
-                  >
+                  <Badge variant="outline" className={cn(decisionMeta.badge)}>
                     {decisionMeta.label}
                   </Badge>
                   {overallConfidence != null ? (
@@ -576,17 +574,16 @@ export function AnalysisPanel({
               </div>
             </section>
 
-            {/* Decision trace */}
             {decisionTrace.length > 0 ? (
               <section aria-label="Decision trace" className="space-y-2">
-                <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                   Decision trace
                 </h3>
-                <ul className="grid gap-1.5 sm:grid-cols-2">
+                <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   {decisionTrace.map((item) => (
                     <li
                       key={item.id}
-                      className="flex items-start gap-2 rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-xs"
+                      className="flex items-start gap-2 rounded-2xl border border-border/70 bg-card/70 px-3 py-2.5 text-xs"
                     >
                       <TraceIcon tone={item.tone} />
                       <span className="leading-snug">{item.label}</span>
@@ -596,30 +593,66 @@ export function AnalysisPanel({
               </section>
             ) : null}
 
-            {/* Stage 3 — Intent & Scope */}
-            {analysis.intentScope ? (
-              <IntentScopeSection
-                intent={analysis.intentScope}
-                decisionLabel={decisionMeta.label}
-              />
-            ) : null}
+            <section
+              aria-label="Analysis summary"
+              className="sticky top-14 z-20 -mx-4 border-y border-border/70 bg-background/90 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6"
+            >
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+                <MetaStat
+                  label="Confidence"
+                  value={
+                    overallConfidence != null
+                      ? `${(overallConfidence * 100).toFixed(0)}%`
+                      : "—"
+                  }
+                />
+                <MetaStat
+                  label="Files analyzed"
+                  value={String(analysis.filesChanged ?? 0)}
+                />
+                <MetaStat
+                  label="Duration"
+                  value={formatDuration(analysis.durationMs)}
+                />
+                <MetaStat
+                  label="Provider"
+                  value={
+                    analysis.provider
+                      ? `${titleCase(analysis.provider)}${
+                          analysis.model
+                            ? ` · ${shortModelName(analysis.model)}`
+                            : ""
+                        }`
+                      : "—"
+                  }
+                />
+                <MetaStat
+                  label="Commit SHA"
+                  value={analysis.headSha ? analysis.headSha.slice(0, 12) : "—"}
+                  mono
+                />
+                <MetaStat
+                  label="Findings"
+                  value={String(analysis.findings.length)}
+                />
+              </div>
+            </section>
 
-            {/* Risk breakdown */}
             <section aria-label="Risk breakdown">
-              <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 Risk breakdown
               </h3>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 {RISK_STRIP_ORDER.map((key) => {
                   const count = riskBreakdown[key] ?? 0;
                   return (
                     <div
                       key={key}
                       className={cn(
-                        "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs",
+                        "inline-flex items-center justify-between gap-3 rounded-2xl border px-3 py-2 text-xs",
                         count > 0
-                          ? "border-border/80 bg-background/60"
-                          : "border-border/40 bg-muted/20 text-muted-foreground",
+                          ? "border-border/80 bg-card/70"
+                          : "border-border/50 bg-muted/20 text-muted-foreground",
                       )}
                     >
                       <span className="font-medium tracking-wide">
@@ -637,47 +670,6 @@ export function AnalysisPanel({
                   );
                 })}
               </div>
-            </section>
-
-            {/* Compact summary meta */}
-            <section
-              aria-label="Analysis summary"
-              className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
-            >
-              <MetaStat label="Reason" value={primaryReason} />
-              <MetaStat
-                label="Files analyzed"
-                value={String(analysis.filesChanged ?? 0)}
-              />
-              <MetaStat
-                label="Duration"
-                value={formatDuration(analysis.durationMs)}
-              />
-              <MetaStat
-                label="Provider"
-                value={
-                  analysis.provider
-                    ? `${titleCase(analysis.provider)}${
-                        analysis.model
-                          ? ` · ${shortModelName(analysis.model)}`
-                          : ""
-                      }`
-                    : "—"
-                }
-              />
-              <MetaStat
-                label="Commit SHA"
-                value={
-                  analysis.headSha
-                    ? analysis.headSha.slice(0, 12)
-                    : "—"
-                }
-                mono
-              />
-              <MetaStat
-                label="Findings"
-                value={String(analysis.findings.length)}
-              />
             </section>
 
             {metadataChips.length > 0 ? (
@@ -709,14 +701,14 @@ export function AnalysisPanel({
             ) : null}
 
             {analysis.docsOnly ? (
-              <div className="rounded-lg border border-sky-500/25 bg-sky-500/10 px-3 py-2 text-xs text-sky-900 dark:text-sky-100">
+              <div className="rounded-2xl border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-xs text-sky-900 dark:text-sky-100">
                 This pull request modifies documentation only.
               </div>
             ) : null}
 
             {analysis.deterministicResult?.sensitiveAreas?.length ? (
-              <div className="rounded-xl border border-border/70 bg-background/40 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              <div className="rounded-2xl border border-border/70 bg-card/70 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                   Sensitive areas (deterministic)
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -729,10 +721,9 @@ export function AnalysisPanel({
               </div>
             ) : null}
 
-            {/* Findings */}
             <section className="space-y-3" aria-label="Findings">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="size-4 text-brand" aria-hidden />
+                <CheckCircle2 className="size-4 text-foreground" aria-hidden />
                 <h3 className="text-sm font-semibold">Findings</h3>
                 <span className="text-xs text-muted-foreground">
                   {analysis.findings.length}
@@ -750,21 +741,29 @@ export function AnalysisPanel({
                   body="The analysis completed without structured findings for this change set."
                 />
               ) : (
-                analysis.findings.map((finding) => (
-                  <FindingCard key={finding.id} finding={finding} />
-                ))
+                <div className="space-y-3">
+                  {analysis.findings.map((finding) => (
+                    <FindingCard key={finding.id} finding={finding} />
+                  ))}
+                </div>
               )}
             </section>
 
-            {/* Changed files */}
+            {analysis.intentScope ? (
+              <IntentScopeSection
+                intent={analysis.intentScope}
+                decisionLabel={decisionMeta.label}
+              />
+            ) : null}
+
             {analysis.changedFiles.length > 0 ? (
               <section className="space-y-2" aria-label="Changed files">
                 <h3 className="text-sm font-semibold">Changed files</h3>
-                <div className="max-h-64 space-y-1 overflow-y-auto rounded-xl border border-border/70 p-2">
+                <div className="max-h-64 space-y-1 overflow-y-auto rounded-2xl border border-border/70 bg-card/70 p-2">
                   {analysis.changedFiles.map((file) => (
                     <div
                       key={`${file.path}-${file.status}`}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors hover:bg-muted/30"
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl px-2 py-1.5 text-xs transition-colors hover:bg-muted/30"
                     >
                       <div className="min-w-0">
                         <p className="truncate font-mono">{file.path}</p>
@@ -792,9 +791,12 @@ export function AnalysisPanel({
         ) : null}
 
         {busy && effectiveStatus === "not_started" ? (
-          <div className="space-y-2" aria-hidden>
-            <Skeleton className="h-24 w-full rounded-xl" />
-            <Skeleton className="h-16 w-full rounded-xl" />
+          <div className="space-y-3" aria-hidden>
+            <Skeleton className="h-28 w-full rounded-3xl" />
+            <div className="grid gap-3 lg:grid-cols-2">
+              <Skeleton className="h-20 rounded-2xl" />
+              <Skeleton className="h-20 rounded-2xl" />
+            </div>
           </div>
         ) : null}
       </CardContent>
@@ -824,7 +826,7 @@ function IntentScopeSection({
   return (
     <section
       aria-label="Intent and scope"
-      className="space-y-3 rounded-xl border border-border/70 bg-background/40 p-4"
+      className="space-y-4 rounded-3xl border border-border/70 bg-card/70 p-5"
     >
       <div className="flex flex-wrap items-center gap-2">
         <Target className="size-4 text-brand" aria-hidden />
@@ -835,7 +837,7 @@ function IntentScopeSection({
       </div>
 
       {/* Compact summary strip */}
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         <MetaStat label="Decision" value={decisionLabel} />
         <MetaStat label="Task summary" value={intent.taskSummary} />
         <MetaStat
@@ -880,9 +882,12 @@ function IntentScopeSection({
         </Badge>
       </div>
 
-      <div className="rounded-lg border border-border/60 bg-muted/15 p-3">
+      <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
         <div className="flex items-start gap-2">
-          <Crosshair className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          <Crosshair
+            className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+            aria-hidden
+          />
           <div className="min-w-0 space-y-1">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Task
@@ -909,7 +914,11 @@ function IntentScopeSection({
                 <span className="text-xs text-muted-foreground">—</span>
               ) : (
                 intent.expectedAreas.map((a) => (
-                  <Badge key={a} variant="outline" className="font-normal text-[11px]">
+                      <Badge
+                        key={a}
+                        variant="outline"
+                        className="font-normal text-[11px]"
+                      >
                     {a}
                   </Badge>
                 ))
@@ -925,7 +934,11 @@ function IntentScopeSection({
                 <span className="text-xs text-muted-foreground">—</span>
               ) : (
                 intent.actualAreas.map((a) => (
-                  <Badge key={a} variant="secondary" className="font-normal text-[11px]">
+                      <Badge
+                        key={a}
+                        variant="secondary"
+                        className="font-normal text-[11px]"
+                      >
                     {a}
                   </Badge>
                 ))
@@ -938,7 +951,7 @@ function IntentScopeSection({
       {intent.scopeCreepDetected ? (
         <div
           role="status"
-          className="rounded-lg border border-risk-review/40 bg-risk-review/10 px-3 py-2"
+          className="rounded-2xl border border-risk-review/40 bg-risk-review/10 px-3 py-3"
         >
           <p className="text-xs font-semibold text-risk-review-foreground">
             Scope creep detected
@@ -1041,7 +1054,7 @@ function FindingCard({ finding }: { finding: AnalysisFindingRecord }) {
   const showFullEvidence = evidenceNeedsCollapse(evidence);
 
   return (
-    <article className="space-y-2 rounded-xl border border-border/70 bg-background/40 p-4 transition-shadow hover:shadow-sm">
+    <article className="space-y-3 rounded-3xl border border-border/70 bg-card/70 p-4 transition-colors hover:border-border hover:bg-card">
       <div className="flex flex-wrap items-center gap-2">
         <Badge
           variant="outline"
@@ -1067,23 +1080,25 @@ function FindingCard({ finding }: { finding: AnalysisFindingRecord }) {
         )}
       </div>
 
-      <h4 className="text-sm font-semibold leading-snug">{finding.title}</h4>
-      <p className="text-sm text-muted-foreground">{finding.summary}</p>
+      <div className="space-y-1.5">
+        <h4 className="text-sm font-semibold leading-snug">{finding.title}</h4>
+        <p className="text-sm text-muted-foreground">{finding.summary}</p>
+      </div>
 
-      <p className="text-sm leading-relaxed">
+      <p className="text-sm leading-relaxed text-foreground/90">
         {expanded || !longExplanation
           ? finding.explanation
           : `${finding.explanation.slice(0, 220).trimEnd()}…`}
       </p>
 
-      <div className="rounded-lg border border-border/60 bg-muted/15 p-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
           Evidence
         </p>
-        <dl className="mt-2 space-y-1.5 text-xs">
+        <dl className="mt-3 space-y-1.5 text-xs">
           <div className="grid grid-cols-[5.5rem_1fr] gap-2">
             <dt className="text-muted-foreground">File</dt>
-            <dd className="min-w-0 truncate font-mono">
+            <dd className="min-w-0 truncate font-mono text-[11px] text-foreground/90">
               {evidence.file ?? "—"}
             </dd>
           </div>
@@ -1095,7 +1110,7 @@ function FindingCard({ finding }: { finding: AnalysisFindingRecord }) {
           ) : null}
           <div className="grid grid-cols-[5.5rem_1fr] gap-2">
             <dt className="text-muted-foreground">Observed</dt>
-            <dd className="leading-relaxed">
+            <dd className="leading-relaxed text-foreground/90">
               {expanded || !showFullEvidence
                 ? evidence.observedChange
                 : `${evidence.observedChange.slice(0, 160).trimEnd()}…`}
@@ -1103,11 +1118,11 @@ function FindingCard({ finding }: { finding: AnalysisFindingRecord }) {
           </div>
           <div className="grid grid-cols-[5.5rem_1fr] gap-2">
             <dt className="text-muted-foreground">Supports</dt>
-            <dd className="leading-relaxed">{evidence.supportsFinding}</dd>
+            <dd className="leading-relaxed text-foreground/90">{evidence.supportsFinding}</dd>
           </div>
         </dl>
         {expanded && evidence.raw && evidence.raw !== evidence.observedChange ? (
-          <p className="mt-2 whitespace-pre-wrap border-t border-border/50 pt-2 text-[11px] leading-relaxed text-muted-foreground">
+          <p className="mt-3 whitespace-pre-wrap border-t border-border/50 pt-3 text-[11px] leading-relaxed text-muted-foreground">
             {evidence.raw}
           </p>
         ) : null}
@@ -1122,7 +1137,7 @@ function FindingCard({ finding }: { finding: AnalysisFindingRecord }) {
           {finding.affectedFiles.map((file) => (
             <code
               key={file}
-              className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]"
+              className="rounded-md border border-border/60 bg-background/70 px-1.5 py-0.5 font-mono text-[10px]"
             >
               {file}
             </code>
@@ -1162,7 +1177,7 @@ function ProgressPanel({
 }) {
   return (
     <div
-      className="rounded-xl border border-border/70 bg-muted/15 px-4 py-4"
+      className="rounded-3xl border border-border/70 bg-card/70 px-4 py-4"
       role="status"
       aria-live="polite"
       aria-label="Analysis progress"
@@ -1267,7 +1282,7 @@ function EmptyState({
   icon?: ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
+    <div className="rounded-3xl border border-dashed border-border/70 bg-muted/20 px-4 py-8 text-center">
       {icon ? (
         <div className="mb-3 flex justify-center" aria-hidden>
           {icon}
@@ -1291,8 +1306,8 @@ function MetaStat({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-border/70 bg-background/40 p-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+    <div className="rounded-2xl border border-border/70 bg-background/70 p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
         {label}
       </p>
       <p

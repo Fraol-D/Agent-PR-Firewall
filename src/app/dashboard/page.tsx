@@ -92,21 +92,37 @@ export default async function DashboardPage() {
       };
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
-      <div className="space-y-1">
-        <h2 className="text-lg font-semibold tracking-tight">
-          Welcome
-          {user?.displayName || user?.username
-            ? `, ${user.displayName ?? user.username}`
-            : ""}
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Monitor agent pull requests for scope compliance, impact, and risk.
-        </p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <section className="surface rounded-3xl px-5 py-5 sm:px-6 sm:py-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl space-y-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Dashboard
+            </p>
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              Welcome
+              {user?.displayName || user?.username
+                ? `, ${user.displayName ?? user.username}`
+                : ""}
+            </h2>
+            <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
+              Monitor agent pull requests with a clean, trust-first view of
+              scope, impact, and decision quality.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" render={<Link href="/dashboard/pull-requests" />}>
+              View pull requests
+            </Button>
+            <Button size="sm" render={<Link href="/dashboard/repositories" />}>
+              Manage repositories
+            </Button>
+          </div>
+        </div>
+      </section>
 
       {!statsResult.ok ? (
-        <div className="flex gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="flex gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <p>{statsResult.error}</p>
         </div>
@@ -149,7 +165,7 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <Card className="border-border/80 bg-card/80 shadow-none">
+      <Card className="shadow-none">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Analysis performance</CardTitle>
           <CardDescription>
@@ -158,7 +174,7 @@ export default async function DashboardPage() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-xl border border-border/70 bg-background/40 p-3">
+            <div className="rounded-2xl border border-border/70 bg-background/70 p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Completed
               </p>
@@ -166,7 +182,7 @@ export default async function DashboardPage() {
                 {perf.totalCompleted}
               </p>
             </div>
-            <div className="rounded-xl border border-border/70 bg-background/40 p-3">
+            <div className="rounded-2xl border border-border/70 bg-background/70 p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Average duration
               </p>
@@ -174,7 +190,7 @@ export default async function DashboardPage() {
                 {formatDuration(perf.averageDurationMs)}
               </p>
             </div>
-            <div className="rounded-xl border border-border/70 bg-background/40 p-3">
+            <div className="rounded-2xl border border-border/70 bg-background/70 p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Fastest
               </p>
@@ -182,7 +198,7 @@ export default async function DashboardPage() {
                 {formatDuration(perf.fastestDurationMs)}
               </p>
             </div>
-            <div className="rounded-xl border border-border/70 bg-background/40 p-3">
+            <div className="rounded-2xl border border-border/70 bg-background/70 p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Slowest
               </p>
@@ -197,7 +213,7 @@ export default async function DashboardPage() {
       {!hasRepos ? <ConnectRepoCard /> : null}
 
       <div className="grid gap-4 lg:grid-cols-5">
-        <Card className="border-border/80 bg-card/80 shadow-none lg:col-span-3">
+        <Card className="shadow-none lg:col-span-3">
           <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
             <div>
               <CardTitle className="text-base">Recent pull requests</CardTitle>
@@ -235,7 +251,7 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/80 bg-card/80 shadow-none lg:col-span-2">
+        <Card className="shadow-none lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-base">Stage status</CardTitle>
             <CardDescription>

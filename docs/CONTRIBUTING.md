@@ -58,14 +58,14 @@ npm run build
 
 ## Project layout (quick)
 
-| Path | Role |
-| --- | --- |
-| `src/app/` | Routes + API |
-| `src/components/` | UI only |
-| `src/lib/analysis/` | Analysis engine |
-| `src/services/` | Domain workflows |
-| `docs/` | Product & engineering docs |
-| `supabase/migrations/` | Schema |
+| Path                   | Role                       |
+| ---------------------- | -------------------------- |
+| `src/app/`             | Routes + API               |
+| `src/components/`      | UI only                    |
+| `src/lib/analysis/`    | Analysis engine            |
+| `src/services/`        | Domain workflows           |
+| `docs/`                | Product & engineering docs |
+| `supabase/migrations/` | Schema                     |
 
 Conventions: TypeScript strict; avoid `any`; thin route handlers; structured analysis logs without secrets.
 
@@ -92,13 +92,13 @@ Useful evaluation branches (reference only): `test/docs-update`, `test/auth-impr
 
 When you change product behavior, update the relevant file under `docs/`:
 
-| Change | Update |
-| --- | --- |
-| Pipeline / modules | `ARCHITECTURE.md` |
-| Decision rules | `DECISION_ENGINE.md` |
-| Stages | `ROADMAP.md` |
-| Requirements | `PRD.md` |
-| Handoff facts | `HANDOFF_STAGE3.md` (or next stage handoff) |
+| Change             | Update                                      |
+| ------------------ | ------------------------------------------- |
+| Pipeline / modules | `ARCHITECTURE.md`                           |
+| Decision rules     | `DECISION_ENGINE.md`                        |
+| Stages             | `ROADMAP.md`                                |
+| Requirements       | `PRD.md`                                    |
+| Handoff facts      | `HANDOFF_STAGE3.md` (or next stage handoff) |
 
 ---
 
