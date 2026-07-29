@@ -10,7 +10,7 @@ This is **not** a generic AI code reviewer. Its central question:
 
 ## Current stage
 
-**Stage 2 — PR Analysis Pipeline**
+**Stage 2 — PR Analysis Pipeline** (with Stage 2.5 hardening in tree)
 
 - Stage 0 foundation + Stage 1 GitHub integration
 - Manual **Analyze pull request** on PR detail
@@ -18,6 +18,20 @@ This is **not** a generic AI code reviewer. Its central question:
 - Bounded analysis context (secrets/lockfiles/binaries excluded)
 - AI-assisted structured findings via **OpenRouter free model** `cohere/north-mini-code:free` (`OPENROUTER_API_KEY`)
 - Historical analyses per commit SHA with outdated detection
+- Hardening: SHA-pinned compares, confidence calibration, duration metrics, structured logs
+
+## Prerequisites
+
+Before setup, you need:
+
+| Requirement | Notes |
+| --- | --- |
+| Node.js 20+ | LTS recommended |
+| npm | Comes with Node |
+| Supabase project | Free tier is fine |
+| GitHub account | For OAuth and GitHub App install |
+| OpenRouter account | Free key for Stage 2 analysis |
+| Optional: tunnel | ngrok or cloudflared if you need live webhooks |
 
 ## Stack
 
@@ -28,14 +42,16 @@ This is **not** a generic AI code reviewer. Its central question:
 | Auth | GitHub OAuth (Supabase Auth) |
 | Data | Supabase PostgreSQL |
 | GitHub | GitHub App + Webhooks + Octokit |
-| Analysis | Modular engine (stubs until Stage 2) |
+| Analysis | Modular engine (OpenRouter free model by default) |
 
 ## Project structure
 
 ```text
 src/
 ├── app/
-│   ├── api/github/      # install, setup, webhooks
+│   ├── api/
+│   │   ├── analysis/    # start + poll analysis
+│   │   └── github/      # install, setup, webhooks, sync
 │   ├── auth/            # OAuth callback
 │   └── dashboard/       # protected UI
 ├── components/
@@ -43,14 +59,15 @@ src/
 │   ├── auth/
 │   ├── supabase/        # user client + service-role admin
 │   ├── github/          # App auth, config, webhook verify
-│   └── analysis/        # Stage 2+ stubs
-├── services/            # installations, repos, PRs, events
+│   └── analysis/        # Stage 2 pipeline + AI providers
+├── services/            # installations, repos, PRs, events, analyses
 ├── types/
 └── config/
 supabase/migrations/
+docs/                    # architecture, PRD, roadmap, handoff
 ```
 
-## Setup
+## Local setup
 
 ### 1. Install dependencies
 
@@ -64,6 +81,8 @@ npm install
 cp .env.example .env.local
 ```
 
+Fill in values from Supabase, your GitHub App, and OpenRouter. Never commit `.env.local` or PEM private keys.
+
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `NEXT_PUBLIC_APP_URL` | Yes | Public app origin (local or tunnel) |
@@ -72,7 +91,8 @@ cp .env.example .env.local
 | `SUPABASE_SERVICE_ROLE_KEY` | **Stage 1** | Webhook + setup writes (server only) |
 | `GITHUB_APP_ID` | **Stage 1** | GitHub App ID |
 | `GITHUB_APP_SLUG` | **Stage 1** | App slug for install URL |
-| `GITHUB_APP_PRIVATE_KEY` | **Stage 1** | App private key (`\n` escaped OK) |
+| `GITHUB_APP_PRIVATE_KEY_PATH` | **Stage 1** | Preferred path to App PEM (e.g. `secrets/github-app.pem`) |
+| `GITHUB_APP_PRIVATE_KEY` | Alt | Full PEM if not using a path |
 | `GITHUB_APP_WEBHOOK_SECRET` | **Stage 1** | HMAC signature verification |
 | `GITHUB_APP_CLIENT_ID` | Optional | App OAuth (not required for Stage 1) |
 | `GITHUB_APP_CLIENT_SECRET` | Optional | App OAuth (not required for Stage 1) |
@@ -124,11 +144,11 @@ cp .env.example .env.local
 5. Create the App, then:
    - Note **App ID** → `GITHUB_APP_ID`
    - Note **slug** from the public page URL (`github.com/apps/<slug>`) → `GITHUB_APP_SLUG`
-   - Generate a **private key** → paste into `GITHUB_APP_PRIVATE_KEY` (use `\n` for newlines in `.env.local`)
+   - Generate a **private key** → save under `secrets/github-app.pem` and set `GITHUB_APP_PRIVATE_KEY_PATH` (preferred), or paste into `GITHUB_APP_PRIVATE_KEY` with `\n` for newlines
 
-### 5. Local webhooks (required for real PR events)
+### 5. Local webhooks (optional for real PR events)
 
-GitHub cannot reach `localhost`. Use a tunnel:
+GitHub cannot reach `localhost`. Use a tunnel **or** use **Import PRs** in the dashboard without webhooks:
 
 ```bash
 # example with ngrok
@@ -161,7 +181,8 @@ Open the app URL → sign in → **Repositories** → **Connect repository**.
 4. Open a PR (or push to an existing PR branch) on that repo.
 5. Confirm the PR appears under **Pull requests** and on the overview.
 6. Open the PR detail page and verify metadata + ingestion history.
-7. Push another commit → PR updates in place (no duplicate row).
+7. Click **Analyze pull request** and confirm structured findings render.
+8. Push another commit → PR updates in place (no duplicate row); re-analyze if head SHA moved.
 
 ### Manual webhook signature check
 
@@ -175,6 +196,7 @@ Open the app URL → sign in → **Repositories** → **Connect repository**.
 | **0** | Landing, GitHub sign-in, protected dashboard shell |
 | **1** | App install, connected repos, signed webhooks, PR list/detail |
 | **2** | Manual analyze, structured findings, commit-aware history |
+| **2.5** | SHA integrity, calibrated confidence, duration metrics, clean failures |
 
 ## Development stages
 
@@ -200,8 +222,22 @@ npm run lint     # ESLint
 - User OAuth scopes are minimal (`read:user`, `user:email`).
 - Repository access is via GitHub App installation, not user PATs.
 - Webhooks are rejected without a valid HMAC signature.
-- `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET`, and `SUPABASE_SERVICE_ROLE_KEY` are server-only.
+- `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET`, `OPENROUTER_API_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are server-only.
 - RLS still scopes user reads; webhooks write with the service role on the server.
+
+## Contributing
+
+This is a portfolio project with staged delivery. If you contribute:
+
+1. Branch from up-to-date `main`.
+2. Keep changes scoped to one concern (docs, auth, API, schema, etc.).
+3. Prefer deterministic analysis steps before LLM calls.
+4. Do not commit secrets (`.env.local`, `secrets/*.pem`, private keys).
+5. Run `npm run lint` and `npm run build` before opening a PR.
+6. Update `docs/` when architecture or stage status changes.
+7. Stay on the free-tier AI path for baseline development (`OPENROUTER_MODEL=cohere/north-mini-code:free`).
+
+See `docs/ROADMAP.md` and `docs/ARCHITECTURE.md` for stage goals and system design.
 
 ## License
 
