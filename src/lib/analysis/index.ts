@@ -17,6 +17,8 @@ export {
   buildConfidenceReason,
   buildOverallConfidenceReason,
 } from "@/lib/analysis/confidence";
+export { analyzeIntentAndScope } from "@/lib/analysis/scope";
+export { classificationLabel } from "@/lib/analysis/scope/classify-pr";
 export {
   createDefaultAiProvider,
   isAiProviderConfigured,

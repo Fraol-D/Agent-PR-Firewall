@@ -53,6 +53,14 @@ export function buildAnalysisContext(input: {
       `Change mode: DOCUMENTATION-ONLY (all changed files are documentation). Review docs quality, not application implementation.`,
     );
   }
+  if (deterministic.intentScope?.taskSummary) {
+    parts.push(
+      `Stated / extracted task: ${redactSecretsInText(deterministic.intentScope.taskSummary)}`,
+    );
+    parts.push(
+      `Scope classification: ${deterministic.intentScope.classification} | match: ${deterministic.intentScope.scopeMatch} | coverage: ${deterministic.intentScope.coverage}`,
+    );
+  }
   if (input.pullRequest.description?.trim()) {
     parts.push(
       `Description:\n${redactSecretsInText(input.pullRequest.description).slice(0, 2000)}`,

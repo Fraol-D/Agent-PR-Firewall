@@ -1,6 +1,6 @@
 /**
- * Analysis Orchestrator — Stage 2 / 2.5
- * Deterministic collection (pinned SHA) → context → AI → calibrate → structured result
+ * Analysis Orchestrator — Stage 2 / 2.5 / 2.6 / 3
+ * Deterministic collection → intent/scope → context → AI → calibrate → decision
  */
 
 import { createDefaultAiProvider } from "@/lib/analysis/ai";
@@ -9,6 +9,8 @@ import { calibrateFindings } from "@/lib/analysis/confidence";
 import { collectPullRequestChanges } from "@/lib/analysis/collect-changes";
 import { computeMergeDecision } from "@/lib/analysis/decision";
 import { logAnalysis } from "@/lib/analysis/log";
+import { analyzeIntentAndScope } from "@/lib/analysis/scope";
+import type { IntentScopeResult } from "@/lib/analysis/scope/types";
 import {
   buildAnalyzedPathSet,
   filterFindingsAffectedFiles,
@@ -49,6 +51,7 @@ export interface RunAnalysisOutput {
   context: AnalysisContext;
   deterministic: DeterministicAnalysisResult;
   ai: AiAnalysisResult;
+  intentScope: IntentScopeResult;
   baseSha: string;
   headSha: string;
 }
@@ -76,16 +79,47 @@ export async function runPullRequestAnalysis(
     );
   }
 
-  const { baseSha, headSha: pinnedHead, ...deterministic } = deterministicFull;
+  const { baseSha, headSha: pinnedHead, ...deterministicBase } =
+    deterministicFull;
 
   logAnalysis("github_fetch_completed", {
     analysisId: input.analysisId,
     pullRequestId: input.pullRequestId,
     headSha: pinnedHead,
-    filesChanged: deterministic.filesChanged,
-    linesAdded: deterministic.linesAdded,
-    linesDeleted: deterministic.linesDeleted,
+    filesChanged: deterministicBase.filesChanged,
+    linesAdded: deterministicBase.linesAdded,
+    linesDeleted: deterministicBase.linesDeleted,
   });
+
+  // Stage 3 — intent extraction & scope verification (deterministic)
+  const intentScope = await analyzeIntentAndScope({
+    owner: input.owner,
+    repo: input.repo,
+    pullNumber: input.pullNumber,
+    installationId: input.installationId,
+    baseSha,
+    headSha: pinnedHead,
+    title: input.pullRequest.title,
+    description: input.pullRequest.description,
+    sourceBranch: input.pullRequest.sourceBranch,
+    changedFiles: deterministicBase.changedFiles,
+    hasTests: deterministicBase.hasTests,
+  });
+
+  logAnalysis("scope_analysis_completed", {
+    analysisId: input.analysisId,
+    pullRequestId: input.pullRequestId,
+    headSha: pinnedHead,
+    scopeMatch: intentScope.scopeMatch,
+    coverage: intentScope.coverage,
+    scopeCreep: intentScope.scopeCreepDetected,
+    scopeScore: intentScope.scopeScore,
+  });
+
+  const deterministic: DeterministicAnalysisResult = {
+    ...deterministicBase,
+    intentScope,
+  };
 
   const context = buildAnalysisContext({
     repository: input.repository,
@@ -147,6 +181,7 @@ export async function runPullRequestAnalysis(
     findings: calibratedFindings,
     deterministic,
     aiOverallStatus: ai.overallStatus,
+    intentScope,
   });
 
   let summary = ai.summary;
@@ -180,6 +215,7 @@ export async function runPullRequestAnalysis(
     context,
     deterministic,
     ai,
+    intentScope,
     baseSha,
     headSha: pinnedHead,
   };

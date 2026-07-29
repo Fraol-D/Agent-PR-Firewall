@@ -3,6 +3,7 @@
  * No AI prose — derived only from findings and change metadata.
  */
 
+import type { IntentScopeResult } from "@/lib/analysis/scope/types";
 import type {
   DecisionTraceItem,
   DeterministicAnalysisResult,
@@ -133,6 +134,8 @@ export interface DecisionInput {
   deterministic: DeterministicAnalysisResult | null | undefined;
   /** Optional AI overall — used only as weak signal when findings are empty. */
   aiOverallStatus?: OverallAnalysisStatus | null;
+  /** Stage 3 intent/scope signals (optional for legacy analyses). */
+  intentScope?: IntentScopeResult | null;
 }
 
 export interface DecisionResult {
@@ -193,6 +196,13 @@ export function computeMergeDecision(input: DecisionInput): DecisionResult {
   const lowConfidence =
     overallConfidence != null && overallConfidence < 0.55 && findings.length > 0;
 
+  const intent =
+    input.intentScope ?? deterministic?.intentScope ?? null;
+  const scopeCreep = Boolean(intent?.scopeCreepDetected);
+  const scopeUnrelated = intent?.scopeMatch === "unrelated";
+  const scopeExceeds = intent?.scopeMatch === "exceeds";
+  const scopeWeakCoverage = intent?.coverage === "low";
+
   let decision: MergeDecision = "safe_to_merge";
   let primaryReason = "No material risks detected in analyzed changes.";
 
@@ -216,10 +226,23 @@ export function computeMergeDecision(input: DecisionInput): DecisionResult {
     mediumPlus > 0 ||
     sensitiveTouch ||
     lowConfidence ||
-    maxSev === "high"
+    maxSev === "high" ||
+    scopeCreep ||
+    scopeUnrelated ||
+    scopeExceeds ||
+    scopeWeakCoverage
   ) {
     decision = "review_recommended";
-    if (mediumPlus > 0 || maxSev === "high") {
+    if (scopeUnrelated) {
+      primaryReason =
+        "Implementation appears unrelated to the stated task — clarify scope.";
+    } else if (scopeCreep || scopeExceeds) {
+      primaryReason =
+        "Scope creep detected: changes exceed the stated task boundaries.";
+    } else if (scopeWeakCoverage) {
+      primaryReason =
+        "Low implementation coverage of the stated task — review completeness.";
+    } else if (mediumPlus > 0 || maxSev === "high") {
       primaryReason = "Medium or high severity findings need human review.";
     } else if (sensitiveTouch) {
       primaryReason =
@@ -261,6 +284,7 @@ export function computeMergeDecision(input: DecisionInput): DecisionResult {
     mediumPlus,
     sensitiveTouch,
     lowConfidence,
+    intent,
   });
 
   return {
@@ -285,10 +309,39 @@ function buildDecisionTrace(input: {
   mediumPlus: number;
   sensitiveTouch: boolean;
   lowConfidence: boolean;
+  intent?: IntentScopeResult | null;
 }): DecisionTraceItem[] {
   const items: DecisionTraceItem[] = [];
   const infoLow = countBySeverity(input.findings, ["info", "low"]);
   const highCrit = countBySeverity(input.findings, ["high", "critical"]);
+
+  if (input.intent) {
+    if (input.intent.scopeMatch === "matches") {
+      items.push({
+        id: "scope-match",
+        tone: "positive",
+        label: "Implementation matches stated task",
+      });
+    } else if (input.intent.scopeCreepDetected || input.intent.scopeMatch === "exceeds") {
+      items.push({
+        id: "scope-creep",
+        tone: "warning",
+        label: "Scope creep detected relative to stated task",
+      });
+    } else if (input.intent.scopeMatch === "unrelated") {
+      items.push({
+        id: "scope-unrelated",
+        tone: "negative",
+        label: "Changes appear unrelated to stated task",
+      });
+    } else if (input.intent.scopeMatch === "partial") {
+      items.push({
+        id: "scope-partial",
+        tone: "warning",
+        label: "Partial match to stated task",
+      });
+    }
+  }
 
   if (input.docsOnly) {
     items.push({

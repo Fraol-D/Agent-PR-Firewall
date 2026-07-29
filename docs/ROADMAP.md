@@ -1,18 +1,18 @@
 # Agent PR Firewall — Development Roadmap
 
-This roadmap aligns with `REQUIREMENTS.md` stages and what is actually in the codebase.
+**Product version target:** v0.3.0 = Stage 3 complete  
 
 ---
 
-## Why staged delivery?
+## Principles
 
 | Principle | Reason |
 | --- | --- |
-| Don’t skip foundations | Auth, repos, and PR data must exist before analysis |
-| Deterministic before LLM | Objective facts first; AI explains, doesn’t invent ground truth |
-| Free-tier friendly | Avoid paid-only paths for portfolio development |
-| Modular monolith | Ship features without distributed complexity |
-| Human in the loop early | No silent auto-merge until decision stages are deliberate |
+| Foundations first | Auth, repos, PRs before analysis |
+| Deterministic before LLM | Facts first; AI explains |
+| Free-tier friendly | No paid AI required for core demo |
+| Modular monolith | Avoid premature distribution |
+| Human in the loop | No silent auto-merge until deliberate |
 
 ---
 
@@ -20,156 +20,83 @@ This roadmap aligns with `REQUIREMENTS.md` stages and what is actually in the co
 
 ### Stage 0 — Foundation
 
-**Why:** Application shell, identity, design system, and schema so later stages plug in cleanly.
+Next.js app, design system, Supabase auth/schema, dashboard shell.
 
-**Includes:**
+**Status:** Complete.
 
-- Next.js + TypeScript + Tailwind + shadcn/ui  
-- Supabase Auth (GitHub OAuth) + user profile  
-- Protected dashboard layout  
-- Initial PostgreSQL schema + RLS  
-- Landing page + empty-state product surfaces  
+### Stage 1 — GitHub integration
 
-**Status:** Complete and previously verified. Committed on `main` (root commit era / foundation).
+GitHub App install/setup/sync, webhooks, PR persistence, list/detail, Import PRs.
 
----
+**Status:** Complete.
 
-### Stage 1 — GitHub Integration
+### Stage 2 — PR analysis pipeline
 
-**Why:** Without real repo + PR data, analysis is theater.
+Manual analyze, SHA-aware lifecycle, OpenRouter free model, findings UI, version history.
 
-**Includes:**
+**Status:** Complete.
 
-- GitHub App install / setup / recovery sync  
-- Webhook endpoint + signature verification  
-- PR/repo persistence and idempotency  
-- Dashboard list + PR detail (ingestion metadata)  
-- Manual PR import when webhooks unavailable  
+### Stage 2.5 — Hardening
 
-**Status:** Complete and manually verified. **Pushed on `main`** (`2bdff3b` — “Implement Stage 1 GitHub App integration and PR ingestion”).
+SHA-pinned compare, confidence calibration, `affectedFiles` filter, `duration_ms`, structured logs, atomic completion RPC.
 
----
+**Status:** Complete. Migration: `004_stage2_5_hardening.sql`.
 
-### Stage 2 — PR Analysis Pipeline
+### Stage 2.6 — UX & trust
 
-**Why:** Answer “what changed and what should a reviewer care about?” with structured, persisted findings—not auto-merge.
+Merge decision UI, decision trace, structured evidence, progress steps, notifications, risk breakdown, docs-aware prompts.
 
-**Includes:**
+**Status:** Complete. See `STAGE_2_6_REPORT.md`.
 
-- Manual Analyze on PR detail  
-- Lifecycle (pending → running → completed/failed)  
-- Diff collection, classification, bounded context  
-- AI provider abstraction  
-- OpenRouter free model `cohere/north-mini-code:free`  
-- Zod validation + normalization  
-- Findings UI, history by analysis version, outdated SHA detection  
+### Stage 3 — Intent verification & scope analysis
 
-**Status:** Implemented and **manually verified** on a real PR (analysis completed with findings).  
+Task extraction, PR classification, scope match/creep/coverage/missing work, Intent & Scope panel, decision integration.
 
-**Git note:** Much of Stage 2 code may still be **local / uncommitted** relative to remote `main` (which is Stage 1). Next engineer should commit Stage 2 + docs carefully (no secrets).
+**Status:** Complete (v0.3.0). See `STAGE_3_REPORT.md`, `HANDOFF_STAGE3.md`.
 
----
-
-## In tree / next verification
-
-### Stage 2.5 — Hardening & reliability
-
-**Why:** Stage 2 proves the path works; 2.5 makes results trustworthy (SHA integrity, atomic writes, confidence, observability).
-
-**Objectives:**
-
-- Pin every GitHub fetch to analysis `head_sha`  
-- Atomic (or cleanup-safe) persistence  
-- Validate `affectedFiles` against real changed paths  
-- Calibrate confidence (cap ~95%, penalize weak evidence)  
-- Record `duration_ms`; dashboard averages  
-- Structured analysis logs without secrets  
-
-**Status in codebase:** Implementation **present** (`004_stage2_5_hardening.sql`, `confidence.ts`, `validate-files.ts`, `log.ts`, SHA-pinned compare, dashboard metrics).  
-
-**Remaining for next thread:**
-
-1. Ensure migration `004` applied in Supabase.  
-2. Re-run analysis on a PR and confirm duration + calibrated confidence.  
-3. Commit + push Stage 2 + 2.5 + docs if not already on remote.  
-4. Treat 2.5 as “done” only after that verification.
-
----
-
-### Stage 2.6 — UX & Trust Hardening
-
-**Why:** Make analysis results scannable and trustworthy without new product engines.
-
-**Includes:**
-
-- Deterministic merge decision (Safe / Review / Block) + decision trace  
-- Structured evidence, risk breakdown, metadata chips  
-- Confidence reasons (High / Medium / Low)  
-- Documentation-only prompt and summary handling  
-- Live progress steps, browser notification + soft completion sound  
-- Collapsible findings and improved empty/loading states  
-
-**Status:** Implemented on branch `stage/2.6-ux-trust-hardening`. See `docs/STAGE_2_6_REPORT.md`.
+**Code:** `src/lib/analysis/scope/`
 
 ---
 
 ## Upcoming
 
-### Stage 3 — Task-scope analysis
+### Stage 4 — Decision engine productization
 
-**Why:** Core product differentiator—intended task vs actual changes.
+**Why:** Turn deterministic recommendations into a first-class, configurable policy product.
 
-**Planned:**
+**Directions:**
 
-- Extract task from issue / PR / manual source  
-- Expected vs unexpected areas  
-- Scope deviation classification  
-- UI for task → expected → actual → unexpected  
+- Persist `final_decision` with versioned rule ids  
+- Policy thresholds (what becomes BLOCK vs REVIEW)  
+- Stronger impact/risk modules (beyond stubs)  
+- Optional GitHub Check / commit status (read-only first)  
+- Audit trail for decision overrides  
 
-**Stub location:** `src/lib/analysis/scope/`
-
-**Do not start until Stage 2.5 is verified and committed if required by the team.**
-
----
-
-### Stage 4 — Decision engine
-
-**Why:** Combine risk, scope, impact into explainable recommendations.
-
-**Planned outcomes:** `LOW` | `REVIEW_RECOMMENDED` | `REVIEW_REQUIRED` | `BLOCKED`  
-with stored reasons—not opaque scores alone.
-
-**Stub location:** risk/decision concepts in schema (`final_decision`) and modules.
-
----
+**See:** [`DECISION_ENGINE.md`](./DECISION_ENGINE.md) (current rules) and Stage 4 notes in [`HANDOFF_STAGE3.md`](./HANDOFF_STAGE3.md).
 
 ### Stage 5 — Agent feedback loop
 
-**Why:** Close the loop with agents via PR comments / checks; re-analyze on new commits.
-
----
+PR comments or checks for agents; re-analyze on new commits; structured “fix these items” output.
 
 ### Stage 6 — Portfolio & product polish
 
-**Why:** Presentability: demo narrative, polished UI, architecture story, sample analyses.
+Demo narrative, sample analyses, public screenshots, optional deploy story.
 
 ---
 
-## Future ideas (not scheduled)
+## Future ideas (unscheduled)
 
-- Self-hosted / local LLM analysis option  
-- Deeper import-graph blast radius  
-- Multi-seat org workspaces  
-- Policy configuration UI  
-- Graphite/GitHub status check productization  
-- Paid provider optional (never required for core demo)  
+- Local / self-hosted LLM path  
+- Import-graph blast radius  
+- Org multi-seat workspaces  
+- Policy UI  
+- Optional paid models (never required for baseline)  
 
 ---
 
-## Suggested next engineer order of work
+## Suggested next work
 
-1. Read `docs/HANDOFF_STAGE2.md`.  
-2. Apply any missing migrations (`003`, `004`).  
-3. Commit Stage 2 + 2.5 + `docs/` (exclude secrets).  
-4. Verify 2.5 on a real analysis.  
-5. Only then open Stage 3 design/implementation.  
+1. Read [`HANDOFF_STAGE3.md`](./HANDOFF_STAGE3.md).  
+2. Confirm migrations `001`–`004` on the target Supabase project.  
+3. Commit remaining Stage 3 + docs polish to `main` if not already.  
+4. Design Stage 4 policy + persistence (no silent GitHub blocks yet).  

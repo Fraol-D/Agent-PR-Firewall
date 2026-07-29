@@ -29,6 +29,60 @@ function emptySeverity(): Record<FindingSeverity, number> {
   return { info: 0, low: 0, medium: 0, high: 0, critical: 0 };
 }
 
+/** Inline analysis maxDuration is 300s; treat longer as abandoned. */
+const STALE_ANALYSIS_MS = 6 * 60 * 1000;
+
+const STALE_ANALYSIS_MESSAGE =
+  "Analysis timed out or the server process ended before completion. Retry analysis.";
+
+function analysisAgeMs(row: {
+  started_at?: string | null;
+  created_at?: string | null;
+}): number {
+  const raw = row.started_at || row.created_at;
+  if (!raw) return 0;
+  const t = new Date(raw).getTime();
+  return Number.isFinite(t) ? Math.max(0, Date.now() - t) : 0;
+}
+
+/**
+ * Mark abandoned pending/running rows as failed so the UI stops polling.
+ */
+async function failStaleAnalysisRow(
+  row: Tables<"analyses">,
+): Promise<Tables<"analyses">> {
+  if (row.status !== "pending" && row.status !== "running") {
+    return row;
+  }
+  if (analysisAgeMs(row) < STALE_ANALYSIS_MS) {
+    return row;
+  }
+
+  try {
+    const admin = createAdminClient();
+    const completedAt = new Date().toISOString();
+    await admin
+      .from("analyses")
+      .update({
+        status: "failed",
+        error_message: STALE_ANALYSIS_MESSAGE,
+        completed_at: completedAt,
+      })
+      .eq("id", row.id)
+      .in("status", ["pending", "running"]);
+
+    return {
+      ...row,
+      status: "failed",
+      error_message: STALE_ANALYSIS_MESSAGE,
+      completed_at: completedAt,
+    };
+  } catch (err) {
+    console.error("failStaleAnalysisRow:", err);
+    return row;
+  }
+}
+
 function mapAnalysis(
   row: Tables<"analyses">,
   currentHeadSha: string | null,
@@ -237,11 +291,14 @@ export async function getAnalysisDetail(
       return { ok: true, data: null };
     }
 
+    // Heal abandoned in-flight jobs (prevents infinite client polling)
+    const analysisRow = await failStaleAnalysisRow(analysis);
+
     // Verify ownership
     const { data: pr } = await supabase
       .from("pull_requests")
       .select("id, head_sha, repositories!inner(connected_by_user_id)")
-      .eq("id", analysis.pull_request_id)
+      .eq("id", analysisRow.pull_request_id)
       .maybeSingle();
 
     const prRow = pr as unknown as {
@@ -314,20 +371,21 @@ export async function getAnalysisDetail(
     }));
 
     const deterministicResult =
-      (analysis.deterministic_result as unknown as DeterministicAnalysisResult) ??
+      (analysisRow.deterministic_result as unknown as DeterministicAnalysisResult) ??
       null;
 
-    // Prefer deterministic recompute so historical rows get Stage 2.6 UX fields.
+    // Prefer deterministic recompute so historical rows get Stage 2.6/3 UX fields.
     const decisionResult = computeMergeDecision({
       findings: mappedFindings,
       deterministic: deterministicResult,
-      aiOverallStatus: analysis.overall_status as OverallAnalysisStatus | null,
+      aiOverallStatus: analysisRow.overall_status as OverallAnalysisStatus | null,
+      intentScope: deterministicResult?.intentScope ?? null,
     });
 
     return {
       ok: true,
       data: {
-        ...mapAnalysis(analysis, currentHeadSha ?? prRow.head_sha),
+        ...mapAnalysis(analysisRow, currentHeadSha ?? prRow.head_sha),
         // Align stored overall with deterministic decision for display consistency
         overallStatus: decisionResult.overallStatus,
         findings: mappedFindings,
@@ -347,6 +405,7 @@ export async function getAnalysisDetail(
         ),
         riskBreakdown: buildRiskBreakdown(mappedFindings),
         docsOnly: decisionResult.docsOnly,
+        intentScope: deterministicResult?.intentScope ?? null,
       },
     };
   } catch (err) {
@@ -427,10 +486,12 @@ export async function startPullRequestAnalysis(input: {
       };
     }
 
-    // Reuse in-flight analysis for same SHA
+    // Reuse in-flight analysis for same SHA only if still fresh.
+    // Stale pending/running rows (crashed request, tab closed mid-run) would
+    // otherwise pin the client in an infinite poll loop.
     const { data: inFlight } = await admin
       .from("analyses")
-      .select("id, status")
+      .select("id, status, started_at, created_at")
       .eq("pull_request_id", input.pullRequestId)
       .eq("head_sha", pr.head_sha)
       .in("status", ["pending", "running"])
@@ -439,10 +500,22 @@ export async function startPullRequestAnalysis(input: {
       .maybeSingle();
 
     if (inFlight) {
-      return {
-        ok: true,
-        data: { analysisId: inFlight.id, reused: true },
-      };
+      if (analysisAgeMs(inFlight) < STALE_ANALYSIS_MS) {
+        return {
+          ok: true,
+          data: { analysisId: inFlight.id, reused: true },
+        };
+      }
+
+      await admin
+        .from("analyses")
+        .update({
+          status: "failed",
+          error_message: STALE_ANALYSIS_MESSAGE,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", inFlight.id)
+        .in("status", ["pending", "running"]);
     }
 
     // Reuse completed analysis for same SHA unless force
@@ -681,6 +754,7 @@ async function executeAnalysisJob(job: {
         ...result.context.stats,
         baseSha: result.baseSha,
         headSha: result.headSha,
+        intentScope: result.intentScope,
       } as unknown as Json,
       p_risk_classification: overallToRisk(result.ai.overallStatus),
       p_duration_ms: durationMs,
@@ -693,6 +767,8 @@ async function executeAnalysisJob(job: {
         findings: result.ai.findings.length,
         duration_ms: durationMs,
         head_sha: job.headSha,
+        scope_match: result.intentScope.scopeMatch,
+        scope_score: result.intentScope.scopeScore,
       } as unknown as Json,
     };
 
@@ -713,6 +789,39 @@ async function executeAnalysisJob(job: {
         await cleanupAnalysisChildren(admin, job.analysisId);
         throw new Error(`Atomic persistence failed: ${persistError.message}`);
       }
+    }
+
+    // Stage 3 columns (not part of atomic RPC signature)
+    await admin
+      .from("analyses")
+      .update({
+        scope_score: result.intentScope.scopeScore,
+        scope_classification: result.intentScope.scopeClassificationDb,
+      })
+      .eq("id", job.analysisId)
+      .eq("head_sha", job.headSha);
+
+    // Persist extracted task row (best-effort)
+    try {
+      await admin.from("tasks").insert({
+        pull_request_id: job.pullRequestId,
+        source_type: "pr_title",
+        title: result.intentScope.taskSummary.slice(0, 200),
+        description: result.intentScope.scopeMatchReason.slice(0, 1000),
+        extracted_content: [
+          result.intentScope.taskSummary,
+          `classification=${result.intentScope.classification}`,
+          `scopeMatch=${result.intentScope.scopeMatch}`,
+          `coverage=${result.intentScope.coverage}`,
+          ...result.intentScope.taskSources.map(
+            (s) => `[${s.type}] ${s.excerpt}`,
+          ),
+        ]
+          .join("\n")
+          .slice(0, 8000),
+      });
+    } catch {
+      /* non-fatal */
     }
 
     logAnalysis("persistence_completed", {
@@ -890,9 +999,12 @@ async function persistAnalysisSequential(
         ...result.context.stats,
         baseSha: result.baseSha,
         headSha: result.headSha,
+        intentScope: result.intentScope,
       } as unknown as Json,
       error_message: null,
       risk_classification: overallToRisk(result.ai.overallStatus),
+      scope_score: result.intentScope.scopeScore,
+      scope_classification: result.intentScope.scopeClassificationDb,
     })
     .eq("id", job.analysisId)
     .eq("head_sha", job.headSha);
