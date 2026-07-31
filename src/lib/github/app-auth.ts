@@ -11,6 +11,12 @@ function requireAppCredentials() {
   const appId = getGitHubAppId();
   const privateKey = getGitHubAppPrivateKey();
 
+  console.log("GitHub App credential check:", {
+    hasAppId: Boolean(appId),
+    hasPrivateKey: Boolean(privateKey),
+    privateKeyLength: privateKey?.length ?? 0,
+  });
+
   if (!appId || !privateKey) {
     throw new Error(
       "GitHub App is not configured (GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY)",
