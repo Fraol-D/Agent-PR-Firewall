@@ -60,7 +60,7 @@ export default async function PullRequestDetailPage({
               variant="outline"
               render={<Link href="/dashboard/pull-requests" />}
             >
-              Back to pull requests
+              GoBack to pull requests
             </Button>
           </CardContent>
         </Card>
