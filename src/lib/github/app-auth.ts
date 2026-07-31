@@ -13,13 +13,14 @@ function requireAppCredentials() {
 
   console.log("GitHub App credential check:", {
     hasAppId: Boolean(appId),
+    appIdLength: appId?.length ?? 0,
     hasPrivateKey: Boolean(privateKey),
     privateKeyLength: privateKey?.length ?? 0,
   });
 
   if (!appId || !privateKey) {
     throw new Error(
-      "GitHub App is not configured (GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY)",
+      "GitHub App credentials missing. Check GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY.",
     );
   }
 
@@ -38,7 +39,9 @@ export function createAppOctokit(): Octokit {
   });
 }
 
-export function createInstallationOctokit(installationId: number): Octokit {
+export function createInstallationOctokit(
+  installationId: number,
+): Octokit {
   const { appId, privateKey } = requireAppCredentials();
 
   return new Octokit({
