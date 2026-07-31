@@ -37,26 +37,12 @@ export function getGitHubAppId(): string | null {
 export function getGitHubAppPrivateKey(): string | null {
   const raw = process.env.GITHUB_APP_PRIVATE_KEY;
 
-  console.log("GitHub key environment check:", {
-    exists: Boolean(raw),
-    length: raw?.length ?? 0,
-    hasBegin: raw?.includes("BEGIN") ?? false,
-    hasPrivate: raw?.includes("PRIVATE KEY") ?? false,
-    hasEnd: raw?.includes("END") ?? false,
-    hasLiteralSlashN: raw?.includes("\\n") ?? false,
-  });
-
   if (!raw?.trim()) {
     console.error("GITHUB_APP_PRIVATE_KEY is empty.");
     return null;
   }
 
   const normalized = normalizePrivateKeyPem(raw);
-
-  console.log("GitHub key normalized check:", {
-    normalizedLength: normalized.length,
-    valid: isPlausiblePrivateKey(normalized),
-  });
 
   if (!isPlausiblePrivateKey(normalized)) {
     console.error(
