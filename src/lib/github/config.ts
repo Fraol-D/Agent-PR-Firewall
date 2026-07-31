@@ -64,18 +64,19 @@ export function getGitHubAppPrivateKey(): string | null {
       const absolute = path.isAbsolute(keyPath)
         ? keyPath
         : path.join(process.cwd(), keyPath);
+
       if (existsSync(absolute)) {
-        // Support PEM files that accidentally contain literal "\n" sequences
-        // or extra blank lines (common when pasting from env examples).
         const fileKey = normalizePrivateKeyPem(
-          readFileSync(absolute, "utf8"),
+          readFileSync(absolute, "utf8")
         );
+
         if (isPlausiblePrivateKey(fileKey)) {
           return fileKey;
         }
+
         console.error(
           "Private key file does not look like a PEM private key:",
-          absolute,
+          absolute
         );
       } else {
         console.error("Private key path not found:", absolute);
@@ -86,15 +87,32 @@ export function getGitHubAppPrivateKey(): string | null {
   }
 
   const raw = process.env.GITHUB_APP_PRIVATE_KEY;
+
+  console.log("GitHub key debug:", {
+    hasAppId: !!process.env.GITHUB_APP_ID,
+    hasPrivateKey: !!raw,
+    keyLength: raw?.length ?? 0,
+    startsWithBegin: raw?.includes("BEGIN") ?? false,
+    containsPrivateKey: raw?.includes("PRIVATE KEY") ?? false,
+    endsWithEnd: raw?.includes("END") ?? false,
+    hasSlug: !!process.env.GITHUB_APP_SLUG,
+  });
+
   if (!raw?.trim() || looksLikeKeyPath(raw)) {
     return null;
   }
 
   const normalized = normalizePrivateKeyPem(raw);
+
+  console.log("GitHub key normalized:", {
+    normalizedLength: normalized.length,
+    plausible: isPlausiblePrivateKey(normalized),
+  });
+
   if (!isPlausiblePrivateKey(normalized)) {
     console.error(
       "GITHUB_APP_PRIVATE_KEY is present but invalid/too short. " +
-        "Prefer GITHUB_APP_PRIVATE_KEY_PATH pointing at the downloaded .pem file.",
+        "Prefer GITHUB_APP_PRIVATE_KEY_PATH pointing at the downloaded .pem file."
     );
     return null;
   }
