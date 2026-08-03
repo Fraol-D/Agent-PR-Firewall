@@ -49,7 +49,7 @@ export function DashboardHeader({
   }, []);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border/70 bg-background/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur-xl dark:bg-background/90">
       <div className="flex h-14 items-center justify-between gap-3 px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <Sheet>
@@ -87,7 +87,7 @@ export function DashboardHeader({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="inline-flex size-9 items-center justify-center rounded-full border border-border/70 bg-background/80 text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+            className="inline-flex size-9 items-center justify-center rounded-full border border-border/70 bg-background/80 text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground dark:border-border dark:bg-card dark:hover:bg-muted/60"
             aria-label="Toggle theme"
             onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
             disabled={!mounted}

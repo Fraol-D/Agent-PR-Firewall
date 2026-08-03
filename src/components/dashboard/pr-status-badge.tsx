@@ -10,10 +10,11 @@ const labels: Record<PullRequestStatus, string> = {
 };
 
 const styles: Record<PullRequestStatus, string> = {
-  open: "bg-risk-low/15 text-risk-low-foreground border-transparent",
-  draft: "bg-muted/80 text-muted-foreground border-transparent",
-  closed: "bg-secondary text-secondary-foreground border-transparent",
-  merged: "bg-brand-muted text-foreground border-transparent",
+  open: "border-transparent bg-emerald-500/15 text-emerald-900 dark:text-emerald-100",
+  draft: "border-transparent bg-muted/80 text-muted-foreground",
+  closed: "border-transparent bg-secondary text-secondary-foreground",
+  merged:
+    "border-transparent bg-sky-500/15 text-sky-950 dark:bg-sky-500/20 dark:text-sky-100",
 };
 
 export function PrStatusBadge({

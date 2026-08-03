@@ -53,8 +53,8 @@ export function DashboardSidebar({ className }: { className?: string }) {
               className={cn(
                 "group flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2.5 text-sm transition-colors",
                 active
-                  ? "border-sidebar-border bg-sidebar-accent/80 text-sidebar-accent-foreground shadow-sm"
-                  : "text-muted-foreground hover:border-sidebar-border hover:bg-sidebar-accent/50 hover:text-foreground",
+                  ? "border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-sm dark:bg-sidebar-accent/90"
+                  : "text-muted-foreground hover:border-sidebar-border/80 hover:bg-sidebar-accent/40 hover:text-foreground",
               )}
             >
               <Icon

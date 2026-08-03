@@ -12,11 +12,13 @@ interface StatCardProps {
 }
 
 const toneStyles: Record<NonNullable<StatCardProps["tone"]>, string> = {
-  default: "text-muted-foreground bg-muted/60",
-  brand: "text-foreground bg-muted/60",
-  low: "text-risk-low-foreground bg-risk-low/15",
-  review: "text-risk-required-foreground bg-risk-required/15",
-  blocked: "text-risk-blocked-foreground bg-risk-blocked/20",
+  default: "text-muted-foreground bg-muted/70 dark:bg-muted/50",
+  brand: "text-foreground bg-muted/70 dark:bg-brand-muted/80",
+  low: "text-emerald-800 bg-emerald-500/15 dark:text-emerald-200 dark:bg-emerald-500/15",
+  review:
+    "text-amber-900 bg-amber-500/15 dark:text-amber-100 dark:bg-amber-500/15",
+  blocked:
+    "text-red-900 bg-red-500/15 dark:text-red-100 dark:bg-red-500/20",
 };
 
 export function StatCard({

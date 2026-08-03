@@ -107,48 +107,52 @@
 }
 
 .dark {
-  --background: oklch(0.11 0.012 250);
-  --foreground: oklch(0.96 0.005 250);
-  --card: oklch(0.15 0.015 250);
-  --card-foreground: oklch(0.96 0.005 250);
-  --popover: oklch(0.15 0.015 250);
-  --popover-foreground: oklch(0.96 0.005 250);
-  --primary: oklch(0.86 0.02 250);
-  --primary-foreground: oklch(0.11 0.012 250);
-  --secondary: oklch(0.2 0.01 250);
-  --secondary-foreground: oklch(0.95 0.005 250);
-  --muted: oklch(0.2 0.01 250);
-  --muted-foreground: oklch(0.68 0.01 250);
-  --accent: oklch(0.22 0.015 250);
-  --accent-foreground: oklch(0.96 0.005 250);
-  --destructive: oklch(0.65 0.18 25);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.78 0.03 250);
-  --brand: oklch(0.78 0.04 250);
-  --brand-foreground: oklch(0.11 0.012 250);
-  --brand-muted: oklch(0.22 0.015 250);
-  --risk-low: oklch(0.74 0.1 155);
-  --risk-low-foreground: oklch(0.92 0.04 155);
-  --risk-review: oklch(0.84 0.11 90);
-  --risk-review-foreground: oklch(0.95 0.04 90);
-  --risk-required: oklch(0.82 0.11 55);
-  --risk-required-foreground: oklch(0.96 0.03 55);
-  --risk-blocked: oklch(0.68 0.18 25);
-  --risk-blocked-foreground: oklch(0.985 0.002 25);
-  --chart-1: oklch(0.78 0.04 250);
-  --chart-2: oklch(0.74 0.1 155);
-  --chart-3: oklch(0.84 0.11 90);
-  --chart-4: oklch(0.82 0.11 55);
-  --chart-5: oklch(0.68 0.18 25);
-  --sidebar: oklch(0.12 0.012 250);
-  --sidebar-foreground: oklch(0.95 0.005 250);
-  --sidebar-primary: oklch(0.78 0.04 250);
-  --sidebar-primary-foreground: oklch(0.11 0.012 250);
-  --sidebar-accent: oklch(0.2 0.01 250);
-  --sidebar-accent-foreground: oklch(0.95 0.005 250);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.78 0.03 250);
+  /* Deeper base + slightly lifted cards for clearer hierarchy */
+  --background: oklch(0.12 0.014 255);
+  --foreground: oklch(0.97 0.006 250);
+  --card: oklch(0.17 0.016 255);
+  --card-foreground: oklch(0.97 0.006 250);
+  --popover: oklch(0.18 0.016 255);
+  --popover-foreground: oklch(0.97 0.006 250);
+  --primary: oklch(0.9 0.03 210);
+  --primary-foreground: oklch(0.14 0.02 255);
+  --secondary: oklch(0.22 0.014 255);
+  --secondary-foreground: oklch(0.96 0.006 250);
+  /* Higher-contrast secondary text (was too dim at ~0.68) */
+  --muted: oklch(0.22 0.014 255);
+  --muted-foreground: oklch(0.76 0.014 250);
+  --accent: oklch(0.24 0.02 220);
+  --accent-foreground: oklch(0.96 0.01 210);
+  --destructive: oklch(0.68 0.18 22);
+  /* Stronger hairlines so panels don't blend into the canvas */
+  --border: oklch(1 0 0 / 14%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.72 0.08 200);
+  --brand: oklch(0.78 0.09 200);
+  --brand-foreground: oklch(0.12 0.02 255);
+  --brand-muted: oklch(0.24 0.03 220);
+  /* Light text on tinted risk surfaces (not dark-on-green) */
+  --risk-low: oklch(0.72 0.12 155);
+  --risk-low-foreground: oklch(0.9 0.08 155);
+  --risk-review: oklch(0.82 0.12 90);
+  --risk-review-foreground: oklch(0.94 0.06 90);
+  --risk-required: oklch(0.8 0.12 55);
+  --risk-required-foreground: oklch(0.95 0.05 55);
+  --risk-blocked: oklch(0.66 0.18 22);
+  --risk-blocked-foreground: oklch(0.98 0.01 25);
+  --chart-1: oklch(0.78 0.09 200);
+  --chart-2: oklch(0.72 0.12 155);
+  --chart-3: oklch(0.82 0.12 90);
+  --chart-4: oklch(0.8 0.12 55);
+  --chart-5: oklch(0.66 0.18 22);
+  --sidebar: oklch(0.13 0.014 255);
+  --sidebar-foreground: oklch(0.96 0.006 250);
+  --sidebar-primary: oklch(0.78 0.09 200);
+  --sidebar-primary-foreground: oklch(0.12 0.02 255);
+  --sidebar-accent: oklch(0.2 0.016 255);
+  --sidebar-accent-foreground: oklch(0.96 0.006 250);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.72 0.08 200);
 }
 
 @layer base {
@@ -180,9 +184,23 @@
       0 0 40px -12px color-mix(in oklch, var(--brand) 45%, transparent);
   }
 
+  .dark .glow-brand {
+    box-shadow:
+      0 0 0 1px color-mix(in oklch, var(--brand) 35%, transparent),
+      0 0 48px -10px color-mix(in oklch, var(--brand) 40%, transparent);
+  }
+
   .surface {
     background-color: color-mix(in oklch, var(--card) 96%, transparent);
     border: 1px solid color-mix(in oklch, var(--border) 90%, transparent);
     box-shadow: 0 1px 2px color-mix(in oklch, black 5%, transparent);
+  }
+
+  .dark .surface {
+    background-color: color-mix(in oklch, var(--card) 100%, transparent);
+    border: 1px solid color-mix(in oklch, var(--border) 100%, transparent);
+    box-shadow:
+      0 0 0 1px color-mix(in oklch, white 3%, transparent),
+      0 8px 24px -12px color-mix(in oklch, black 55%, transparent);
   }
 }
