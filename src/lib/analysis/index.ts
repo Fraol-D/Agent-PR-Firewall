@@ -1,5 +1,5 @@
 /**
- * Analysis engine public surface — Stage 2 / 2.5 / 2.6.
+ * Analysis engine public surface — Stage 2 / 2.5 / 2.6 / 3 / 4.
  */
 
 export { runPullRequestAnalysis } from "@/lib/analysis/orchestrator";
@@ -19,6 +19,13 @@ export {
 } from "@/lib/analysis/confidence";
 export { analyzeIntentAndScope } from "@/lib/analysis/scope";
 export { classificationLabel } from "@/lib/analysis/scope/classify-pr";
+export { computeRiskFromFindings } from "@/lib/analysis/risk";
+export {
+  computeFinalDecision,
+  finalDecisionLabel,
+  DEFAULT_DECISION_RULES,
+  buildAffectedAreas,
+} from "@/lib/analysis/decision-engine";
 export {
   createDefaultAiProvider,
   isAiProviderConfigured,
@@ -27,3 +34,4 @@ export {
   GeminiAnalysisProvider,
 } from "@/lib/analysis/ai";
 export type * from "@/lib/analysis/types";
+

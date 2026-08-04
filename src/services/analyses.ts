@@ -8,9 +8,15 @@ import {
   buildRiskBreakdown,
   computeMergeDecision,
 } from "@/lib/analysis/decision";
+import {
+  buildAffectedAreas,
+  computeFinalDecision,
+  type DecisionEngineResult,
+} from "@/lib/analysis/decision-engine";
 import { structureFindingEvidence } from "@/lib/analysis/evidence";
 import { logAnalysis } from "@/lib/analysis/log";
 import { runPullRequestAnalysis } from "@/lib/analysis/orchestrator";
+import { computeRiskFromFindings } from "@/lib/analysis/risk";
 import type {
   AnalysisDetail,
   AnalysisFindingRecord,
@@ -22,7 +28,12 @@ import type {
   FindingSeverity,
   OverallAnalysisStatus,
 } from "@/lib/analysis/types";
-import type { ServiceResult } from "@/types/domain";
+import type {
+  Decision,
+  RiskClassification,
+  ScopeClassification,
+  ServiceResult,
+} from "@/types/domain";
 import type { Json, Tables } from "@/types/database";
 
 function emptySeverity(): Record<FindingSeverity, number> {
@@ -111,7 +122,68 @@ function mapAnalysis(
         row.status === "completed" &&
         row.head_sha !== currentHeadSha,
     ),
+    riskScore: row.risk_score ?? null,
+    riskClassification: row.risk_classification ?? null,
+    scopeScore: row.scope_score ?? null,
+    scopeClassification: row.scope_classification ?? null,
+    impactClassification: row.impact_classification ?? null,
+    finalDecision: row.final_decision ?? null,
   };
+}
+
+function recomputeFinalDecisionFromStored(input: {
+  findings: AnalysisFindingRecord[];
+  deterministic: DeterministicAnalysisResult | null;
+  row: Tables<"analyses">;
+  affectedAreas: AnalysisDetail["affectedAreas"];
+}): DecisionEngineResult {
+  const intent = input.deterministic?.intentScope ?? null;
+  const risk = computeRiskFromFindings(input.findings, input.deterministic);
+
+  const riskScore = input.row.risk_score ?? risk.riskScore;
+  const riskClassification = (input.row.risk_classification ??
+    risk.riskClassification) as RiskClassification;
+  const scopeScore =
+    input.row.scope_score ?? intent?.scopeScore ?? 50;
+  const scopeClassification = (input.row.scope_classification ??
+    intent?.scopeClassificationDb ??
+    "UNKNOWN") as ScopeClassification;
+
+  return computeFinalDecision({
+    riskScore,
+    riskClassification,
+    scopeScore,
+    scopeClassification,
+    impactClassification:
+      (input.row.impact_classification as DecisionEngineResult["impactClassification"]) ??
+      null,
+    riskFactors: risk.factors,
+    affectedAreas: input.affectedAreas.map((a) => ({
+      filePath: a.filePath,
+      affectedArea: a.affectedArea,
+      impactType: a.impactType,
+      explanation: a.explanation,
+    })),
+    scopeCreepDetected: intent?.scopeCreepDetected,
+    unrelatedFiles: intent?.unrelatedFiles,
+    coverage: intent?.coverage,
+    sensitiveAreas: input.deterministic?.sensitiveAreas,
+  });
+}
+
+function finalDecisionToMergeDecision(
+  d: Decision | string | null | undefined,
+): "safe_to_merge" | "review_recommended" | "block_merge" {
+  switch (d) {
+    case "LOW":
+      return "safe_to_merge";
+    case "BLOCKED":
+      return "block_merge";
+    case "REVIEW_REQUIRED":
+    case "REVIEW_RECOMMENDED":
+    default:
+      return "review_recommended";
+  }
 }
 
 export async function getAnalysisPerformanceMetrics(
@@ -310,18 +382,24 @@ export async function getAnalysisDetail(
       return { ok: true, data: null };
     }
 
-    const [{ data: findings }, { data: files }] = await Promise.all([
-      supabase
-        .from("analysis_findings")
-        .select("*")
-        .eq("analysis_id", analysisId)
-        .order("sort_order", { ascending: true }),
-      supabase
-        .from("analysis_changed_files")
-        .select("*")
-        .eq("analysis_id", analysisId)
-        .order("path", { ascending: true }),
-    ]);
+    const [{ data: findings }, { data: files }, { data: areas }] =
+      await Promise.all([
+        supabase
+          .from("analysis_findings")
+          .select("*")
+          .eq("analysis_id", analysisId)
+          .order("sort_order", { ascending: true }),
+        supabase
+          .from("analysis_changed_files")
+          .select("*")
+          .eq("analysis_id", analysisId)
+          .order("path", { ascending: true }),
+        supabase
+          .from("affected_areas")
+          .select("*")
+          .eq("analysis_id", analysisId)
+          .order("file_path", { ascending: true }),
+      ]);
 
     const severityBreakdown = emptySeverity();
     const mappedFindings: AnalysisFindingRecord[] = (findings ?? []).map(
@@ -374,7 +452,35 @@ export async function getAnalysisDetail(
       (analysisRow.deterministic_result as unknown as DeterministicAnalysisResult) ??
       null;
 
-    // Prefer deterministic recompute so historical rows get Stage 2.6/3 UX fields.
+    let affectedAreas: AnalysisDetail["affectedAreas"] = (areas ?? []).map(
+      (a) => ({
+        id: a.id,
+        filePath: a.file_path,
+        affectedArea: a.affected_area,
+        impactType: a.impact_type,
+        confidence:
+          a.confidence === null || a.confidence === undefined
+            ? null
+            : Number(a.confidence),
+        explanation: a.explanation ?? null,
+      }),
+    );
+
+    // Backfill affected areas for legacy analyses (no DB rows yet)
+    if (affectedAreas.length === 0 && deterministicResult) {
+      affectedAreas = buildAffectedAreas({
+        deterministic: deterministicResult,
+        intentScope: deterministicResult.intentScope,
+      }).map((a) => ({
+        filePath: a.filePath,
+        affectedArea: a.affectedArea,
+        impactType: a.impactType,
+        confidence: a.confidence,
+        explanation: a.explanation,
+      }));
+    }
+
+    // Stage 2.6 legacy merge decision (UX fallback)
     const decisionResult = computeMergeDecision({
       findings: mappedFindings,
       deterministic: deterministicResult,
@@ -382,18 +488,37 @@ export async function getAnalysisDetail(
       intentScope: deterministicResult?.intentScope ?? null,
     });
 
+    // Stage 4 final decision (recomputed so reasons always available)
+    const finalDecisionResult = recomputeFinalDecisionFromStored({
+      findings: mappedFindings,
+      deterministic: deterministicResult,
+      row: analysisRow,
+      affectedAreas,
+    });
+
+    const primaryReason =
+      finalDecisionResult.reasons.find((r) => r.source === "risk_factor")
+        ?.message ??
+      finalDecisionResult.reasons[0]?.message ??
+      decisionResult.primaryReason;
+
     return {
       ok: true,
       data: {
         ...mapAnalysis(analysisRow, currentHeadSha ?? prRow.head_sha),
-        // Align stored overall with deterministic decision for display consistency
         overallStatus: decisionResult.overallStatus,
+        finalDecision: finalDecisionResult.finalDecision,
+        riskScore: finalDecisionResult.riskScore,
+        riskClassification: finalDecisionResult.riskClassification,
+        scopeScore: finalDecisionResult.scopeScore,
+        scopeClassification: finalDecisionResult.scopeClassification,
+        impactClassification: finalDecisionResult.impactClassification,
         findings: mappedFindings,
         changedFiles,
         deterministicResult,
         severityBreakdown,
-        decision: decisionResult.decision,
-        primaryReason: decisionResult.primaryReason,
+        decision: finalDecisionToMergeDecision(finalDecisionResult.finalDecision),
+        primaryReason,
         decisionTrace: decisionResult.trace,
         overallConfidence: decisionResult.overallConfidence,
         overallConfidenceReason: buildOverallConfidenceReason(
@@ -406,6 +531,8 @@ export async function getAnalysisDetail(
         riskBreakdown: buildRiskBreakdown(mappedFindings),
         docsOnly: decisionResult.docsOnly,
         intentScope: deterministicResult?.intentScope ?? null,
+        finalDecisionResult,
+        affectedAreas,
       },
     };
   } catch (err) {
@@ -721,19 +848,14 @@ async function executeAnalysisJob(job: {
       sort_order: index,
     }));
 
-    const riskFactorsJson = result.ai.findings.map((f) => ({
-      category: f.category.toLowerCase(),
+    const riskFactorsJson = result.risk.factors.map((f) => ({
+      category: f.category,
       severity: f.severity,
-      score_contribution: severityToScore(f.severity),
+      score_contribution: f.scoreContribution,
       title: f.title,
-      description: f.explanation,
-      source_file: f.affectedFiles[0] ?? "",
-      metadata: {
-        summary: f.summary,
-        evidence: f.evidence,
-        confidence: f.confidence,
-        isInference: f.isInference,
-      },
+      description: f.description,
+      source_file: f.sourceFile ?? "",
+      metadata: (f.metadata ?? {}) as Json,
     }));
 
     // Atomic persistence (Postgres function transaction).
@@ -755,13 +877,14 @@ async function executeAnalysisJob(job: {
         baseSha: result.baseSha,
         headSha: result.headSha,
         intentScope: result.intentScope,
+        decisionEngine: result.finalDecision,
       } as unknown as Json,
-      p_risk_classification: overallToRisk(result.ai.overallStatus),
+      p_risk_classification: result.risk.riskClassification,
       p_duration_ms: durationMs,
       p_changed_files: changedFilesJson as unknown as Json,
       p_findings: findingsJson as unknown as Json,
       p_risk_factors: riskFactorsJson as unknown as Json,
-      p_event_message: `Analysis completed with ${result.ai.findings.length} finding(s)`,
+      p_event_message: `Analysis completed with ${result.ai.findings.length} finding(s); decision ${result.finalDecision.finalDecision}`,
       p_event_metadata: {
         overall_status: result.ai.overallStatus,
         findings: result.ai.findings.length,
@@ -769,6 +892,8 @@ async function executeAnalysisJob(job: {
         head_sha: job.headSha,
         scope_match: result.intentScope.scopeMatch,
         scope_score: result.intentScope.scopeScore,
+        final_decision: result.finalDecision.finalDecision,
+        risk_score: result.risk.riskScore,
       } as unknown as Json,
     };
 
@@ -791,15 +916,37 @@ async function executeAnalysisJob(job: {
       }
     }
 
-    // Stage 3 columns (not part of atomic RPC signature)
+    // Stage 3/4 columns (not all part of atomic RPC signature)
     await admin
       .from("analyses")
       .update({
         scope_score: result.intentScope.scopeScore,
         scope_classification: result.intentScope.scopeClassificationDb,
+        risk_score: result.risk.riskScore,
+        risk_classification: result.risk.riskClassification,
+        impact_classification: result.finalDecision.impactClassification,
+        final_decision: result.finalDecision.finalDecision,
       })
       .eq("id", job.analysisId)
       .eq("head_sha", job.headSha);
+
+    // §21.7 affected areas
+    await admin.from("affected_areas").delete().eq("analysis_id", job.analysisId);
+    if (result.affectedAreas.length > 0) {
+      const { error: areasError } = await admin.from("affected_areas").insert(
+        result.affectedAreas.map((a) => ({
+          analysis_id: job.analysisId,
+          file_path: a.filePath,
+          affected_area: a.affectedArea,
+          impact_type: a.impactType,
+          confidence: a.confidence,
+          explanation: a.explanation,
+        })),
+      );
+      if (areasError) {
+        console.error("Failed to persist affected areas:", areasError.message);
+      }
+    }
 
     // Persist extracted task row (best-effort)
     try {
@@ -893,6 +1040,7 @@ async function cleanupAnalysisChildren(
     admin.from("analysis_changed_files").delete().eq("analysis_id", analysisId),
     admin.from("analysis_findings").delete().eq("analysis_id", analysisId),
     admin.from("risk_factors").delete().eq("analysis_id", analysisId),
+    admin.from("affected_areas").delete().eq("analysis_id", analysisId),
   ]);
 }
 
@@ -959,25 +1107,37 @@ async function persistAnalysisSequential(
     }
 
     const { error: riskError } = await admin.from("risk_factors").insert(
-      result.ai.findings.map((f) => ({
+      result.risk.factors.map((f) => ({
         analysis_id: job.analysisId,
-        category: f.category.toLowerCase(),
+        category: f.category,
         severity: f.severity,
-        score_contribution: severityToScore(f.severity),
+        score_contribution: f.scoreContribution,
         title: f.title,
-        description: f.explanation,
-        source_file: f.affectedFiles[0] ?? null,
-        metadata: {
-          summary: f.summary,
-          evidence: f.evidence,
-          confidence: f.confidence,
-          isInference: f.isInference,
-        } as Json,
+        description: f.description,
+        source_file: f.sourceFile ?? null,
+        metadata: (f.metadata ?? {}) as Json,
       })),
     );
     if (riskError) {
       await cleanupAnalysisChildren(admin, job.analysisId);
       throw new Error(`Failed to persist risk factors: ${riskError.message}`);
+    }
+  }
+
+  if (result.affectedAreas.length > 0) {
+    const { error: areasError } = await admin.from("affected_areas").insert(
+      result.affectedAreas.map((a) => ({
+        analysis_id: job.analysisId,
+        file_path: a.filePath,
+        affected_area: a.affectedArea,
+        impact_type: a.impactType,
+        confidence: a.confidence,
+        explanation: a.explanation,
+      })),
+    );
+    if (areasError) {
+      await cleanupAnalysisChildren(admin, job.analysisId);
+      throw new Error(`Failed to persist affected areas: ${areasError.message}`);
     }
   }
 
@@ -1000,11 +1160,15 @@ async function persistAnalysisSequential(
         baseSha: result.baseSha,
         headSha: result.headSha,
         intentScope: result.intentScope,
+        decisionEngine: result.finalDecision,
       } as unknown as Json,
       error_message: null,
-      risk_classification: overallToRisk(result.ai.overallStatus),
+      risk_score: result.risk.riskScore,
+      risk_classification: result.risk.riskClassification,
       scope_score: result.intentScope.scopeScore,
       scope_classification: result.intentScope.scopeClassificationDb,
+      impact_classification: result.finalDecision.impactClassification,
+      final_decision: result.finalDecision.finalDecision,
     })
     .eq("id", job.analysisId)
     .eq("head_sha", job.headSha);
@@ -1028,30 +1192,4 @@ async function persistAnalysisSequential(
   });
 }
 
-function severityToScore(severity: FindingSeverity): number {
-  switch (severity) {
-    case "info":
-      return 0;
-    case "low":
-      return 10;
-    case "medium":
-      return 25;
-    case "high":
-      return 40;
-    case "critical":
-      return 60;
-  }
-}
-
-function overallToRisk(
-  status: OverallAnalysisStatus,
-): "LOW" | "MEDIUM" | "HIGH" {
-  switch (status) {
-    case "no_significant_concerns":
-      return "LOW";
-    case "review_recommended":
-      return "MEDIUM";
-    case "high_risk_concerns":
-      return "HIGH";
-  }
-}
+// severity scoring lives in src/lib/analysis/risk (computeRiskFromFindings)

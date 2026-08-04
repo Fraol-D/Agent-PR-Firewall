@@ -1,6 +1,6 @@
 /**
- * Analysis Orchestrator — Stage 2 / 2.5 / 2.6 / 3
- * Deterministic collection → intent/scope → context → AI → calibrate → decision
+ * Analysis Orchestrator — Stage 2 / 2.5 / 2.6 / 3 / 4
+ * collect → intent/scope → AI → calibrate → risk → final decision
  */
 
 import { createDefaultAiProvider } from "@/lib/analysis/ai";
@@ -8,7 +8,14 @@ import { buildAnalysisContext } from "@/lib/analysis/build-context";
 import { calibrateFindings } from "@/lib/analysis/confidence";
 import { collectPullRequestChanges } from "@/lib/analysis/collect-changes";
 import { computeMergeDecision } from "@/lib/analysis/decision";
+import {
+  buildAffectedAreas,
+  computeFinalDecision,
+  type AffectedAreaDraft,
+  type DecisionEngineResult,
+} from "@/lib/analysis/decision-engine";
 import { logAnalysis } from "@/lib/analysis/log";
+import { computeRiskFromFindings, type RiskAnalysisResult } from "@/lib/analysis/risk";
 import { analyzeIntentAndScope } from "@/lib/analysis/scope";
 import type { IntentScopeResult } from "@/lib/analysis/scope/types";
 import {
@@ -52,6 +59,12 @@ export interface RunAnalysisOutput {
   deterministic: DeterministicAnalysisResult;
   ai: AiAnalysisResult;
   intentScope: IntentScopeResult;
+  /** Stage 2 risk engine output (deterministic from findings). */
+  risk: RiskAnalysisResult;
+  /** Stage 4 decision engine (no LLM). */
+  finalDecision: DecisionEngineResult;
+  /** §21.7 affected areas drafts for persistence. */
+  affectedAreas: AffectedAreaDraft[];
   baseSha: string;
   headSha: string;
 }
@@ -175,9 +188,31 @@ export async function runPullRequestAnalysis(
     analyzedPaths,
   );
 
-  // Stage 2.6: override AI overall with deterministic merge decision
-  // so stored overall_status matches the trust UI.
-  const decision = computeMergeDecision({
+  // Stage 2 risk (deterministic from findings + sensitive areas)
+  const risk = computeRiskFromFindings(calibratedFindings, deterministic);
+
+  const affectedAreas = buildAffectedAreas({
+    deterministic,
+    intentScope,
+  });
+
+  // Stage 4 — final decision from risk × scope (no LLM)
+  const finalDecision = computeFinalDecision({
+    riskScore: risk.riskScore,
+    riskClassification: risk.riskClassification,
+    scopeScore: intentScope.scopeScore,
+    scopeClassification: intentScope.scopeClassificationDb,
+    riskFactors: risk.factors,
+    affectedAreas,
+    scopeCreepDetected: intentScope.scopeCreepDetected,
+    unrelatedFiles: intentScope.unrelatedFiles,
+    coverage: intentScope.coverage,
+    sensitiveAreas: deterministic.sensitiveAreas,
+  });
+
+  // Stage 2.6 UX decision remains available for legacy UI fields;
+  // overall_status is aligned with Stage 4 final decision.
+  const legacyDecision = computeMergeDecision({
     findings: calibratedFindings,
     deterministic,
     aiOverallStatus: ai.overallStatus,
@@ -186,7 +221,7 @@ export async function runPullRequestAnalysis(
 
   let summary = ai.summary;
   if (
-    decision.docsOnly &&
+    legacyDecision.docsOnly &&
     !/documentation only/i.test(summary)
   ) {
     summary = `This pull request modifies documentation only. ${summary}`.slice(
@@ -198,7 +233,7 @@ export async function runPullRequestAnalysis(
   ai = {
     ...ai,
     summary,
-    overallStatus: decision.overallStatus,
+    overallStatus: finalDecisionToOverall(finalDecision.finalDecision),
     findings: calibratedFindings,
   };
 
@@ -206,9 +241,12 @@ export async function runPullRequestAnalysis(
     analysisId: input.analysisId,
     pullRequestId: input.pullRequestId,
     headSha: pinnedHead,
-    decision: decision.decision,
-    docsOnly: decision.docsOnly,
-    overallConfidence: decision.overallConfidence,
+    decision: finalDecision.finalDecision,
+    riskClassification: risk.riskClassification,
+    scopeClassification: intentScope.scopeClassificationDb,
+    riskScore: risk.riskScore,
+    scopeScore: intentScope.scopeScore,
+    ok: true,
   });
 
   return {
@@ -216,7 +254,24 @@ export async function runPullRequestAnalysis(
     deterministic,
     ai,
     intentScope,
+    risk,
+    finalDecision,
+    affectedAreas,
     baseSha,
     headSha: pinnedHead,
   };
+}
+
+function finalDecisionToOverall(
+  d: DecisionEngineResult["finalDecision"],
+): AiAnalysisResult["overallStatus"] {
+  switch (d) {
+    case "LOW":
+      return "no_significant_concerns";
+    case "BLOCKED":
+      return "high_risk_concerns";
+    case "REVIEW_RECOMMENDED":
+    case "REVIEW_REQUIRED":
+      return "review_recommended";
+  }
 }

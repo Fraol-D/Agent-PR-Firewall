@@ -199,6 +199,14 @@ export interface AnalysisRecord {
   durationMs: number | null;
   createdAt: string;
   isOutdated: boolean;
+  /** Stage 2 / 4 persisted scores */
+  riskScore?: number | null;
+  riskClassification?: string | null;
+  scopeScore?: number | null;
+  scopeClassification?: string | null;
+  impactClassification?: string | null;
+  /** Stage 4 final decision: LOW | REVIEW_RECOMMENDED | REVIEW_REQUIRED | BLOCKED */
+  finalDecision?: string | null;
 }
 
 export interface AnalysisPerformanceMetrics {
@@ -229,4 +237,15 @@ export interface AnalysisDetail extends AnalysisRecord {
   docsOnly: boolean;
   /** Stage 3 — intent & scope (null when not computed / legacy analyses). */
   intentScope: IntentScopeResult | null;
+  /** Stage 4 — final decision engine result (null for legacy analyses without recompute). */
+  finalDecisionResult: import("@/lib/analysis/decision-engine").DecisionEngineResult | null;
+  /** Stage 4 — affected areas (§21.7). */
+  affectedAreas: Array<{
+    id?: string;
+    filePath: string;
+    affectedArea: string;
+    impactType: string;
+    confidence: number | null;
+    explanation: string | null;
+  }>;
 }

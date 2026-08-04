@@ -122,6 +122,14 @@ export default async function PullRequestDetailPage({
           {pr.isDraft ? (
             <Badge variant="secondary">Draft</Badge>
           ) : null}
+          {initialAnalysis?.finalDecision ? (
+            <Badge
+              variant="outline"
+              className="font-mono text-[11px] font-semibold"
+            >
+              Decision · {initialAnalysis.finalDecision}
+            </Badge>
+          ) : null}
         </div>
         <h1 className="max-w-4xl text-3xl font-semibold tracking-tight sm:text-4xl">
           {pr.title}
@@ -142,6 +150,11 @@ export default async function PullRequestDetailPage({
             <GitBranch className="size-3.5" />
             {pr.sourceBranch} → {pr.targetBranch}
           </span>
+          {initialAnalysis?.completedAt ? (
+            <span className="text-xs">
+              Analyzed {new Date(initialAnalysis.completedAt).toLocaleString()}
+            </span>
+          ) : null}
         </div>
         </div>
       </section>
@@ -181,8 +194,7 @@ export default async function PullRequestDetailPage({
         <CardHeader>
           <CardTitle className="text-base">Description</CardTitle>
           <CardDescription>
-            From the GitHub pull request body (task extraction arrives in Stage
-            3).
+            From the GitHub pull request body (used for task extraction).
           </CardDescription>
         </CardHeader>
         <CardContent>

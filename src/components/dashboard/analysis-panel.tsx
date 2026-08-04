@@ -45,13 +45,13 @@ import {
   structureFindingEvidence,
 } from "@/lib/analysis/evidence";
 import {
-  mergeDecisionLabel,
   overallToMergeDecision,
 } from "@/lib/analysis/decision";
 import {
   buildConfidenceReason,
   buildOverallConfidenceReason,
 } from "@/lib/analysis/confidence";
+import { finalDecisionLabel } from "@/lib/analysis/decision-engine";
 import { classificationLabel } from "@/lib/analysis/scope/classify-pr";
 import type {
   AnalysisDetail,
@@ -64,6 +64,7 @@ import type {
   MergeDecision,
   StructuredEvidence,
 } from "@/lib/analysis/types";
+import type { Decision } from "@/types/domain";
 import { cn } from "@/lib/utils";
 
 interface AnalysisPanelProps {
@@ -132,41 +133,66 @@ function statusLabel(status: AnalysisJobStatus | "not_started"): string {
   }
 }
 
-function decisionVisual(decision: MergeDecision): {
+function finalDecisionVisual(decision: Decision): {
   icon: typeof ShieldCheck;
   shell: string;
   badge: string;
   label: string;
+  code: Decision;
 } {
   switch (decision) {
-    case "safe_to_merge":
+    case "LOW":
       return {
         icon: ShieldCheck,
-        // Light: dark green text on soft green wash. Dark: light mint text on green tint.
         shell:
           "border-emerald-600/30 bg-emerald-50 text-emerald-950 dark:border-emerald-400/35 dark:bg-emerald-500/15 dark:text-emerald-50",
         badge:
           "border-transparent bg-emerald-600/15 text-emerald-900 dark:bg-emerald-400/20 dark:text-emerald-50",
-        label: mergeDecisionLabel(decision),
+        label: finalDecisionLabel(decision),
+        code: decision,
       };
-    case "review_recommended":
+    case "REVIEW_RECOMMENDED":
       return {
         icon: ShieldAlert,
         shell:
           "border-amber-600/30 bg-amber-50 text-amber-950 dark:border-amber-400/35 dark:bg-amber-500/15 dark:text-amber-50",
         badge:
           "border-transparent bg-amber-600/15 text-amber-950 dark:bg-amber-400/20 dark:text-amber-50",
-        label: mergeDecisionLabel(decision),
+        label: finalDecisionLabel(decision),
+        code: decision,
       };
-    case "block_merge":
+    case "REVIEW_REQUIRED":
+      return {
+        icon: ShieldAlert,
+        shell:
+          "border-orange-600/35 bg-orange-50 text-orange-950 dark:border-orange-400/40 dark:bg-orange-500/15 dark:text-orange-50",
+        badge:
+          "border-transparent bg-orange-600/15 text-orange-950 dark:bg-orange-400/20 dark:text-orange-50",
+        label: finalDecisionLabel(decision),
+        code: decision,
+      };
+    case "BLOCKED":
       return {
         icon: ShieldX,
         shell:
           "border-red-600/35 bg-red-50 text-red-950 dark:border-red-400/40 dark:bg-red-500/15 dark:text-red-50",
         badge:
           "border-transparent bg-red-600/15 text-red-950 dark:bg-red-400/25 dark:text-red-50",
-        label: mergeDecisionLabel(decision),
+        label: finalDecisionLabel(decision),
+        code: decision,
       };
+  }
+}
+
+function mergeToFinal(decision: MergeDecision): Decision {
+  switch (decision) {
+    case "safe_to_merge":
+      return "LOW";
+    case "block_merge":
+      return "BLOCKED";
+    case "review_recommended":
+    default:
+      return "REVIEW_RECOMMENDED";
   }
 }
 
@@ -329,18 +355,30 @@ export function AnalysisPanel({
     }
   }
 
-  const decision: MergeDecision = useMemo(() => {
-    if (analysis?.decision) return analysis.decision;
-    return overallToMergeDecision(analysis?.overallStatus ?? null);
+  const finalDecision: Decision = useMemo(() => {
+    if (analysis?.finalDecisionResult?.finalDecision) {
+      return analysis.finalDecisionResult.finalDecision;
+    }
+    if (analysis?.finalDecision) {
+      return analysis.finalDecision as Decision;
+    }
+    const merge =
+      analysis?.decision ??
+      overallToMergeDecision(analysis?.overallStatus ?? null);
+    return mergeToFinal(merge);
   }, [analysis]);
 
-  const decisionMeta = decisionVisual(decision);
+  const decisionMeta = finalDecisionVisual(finalDecision);
 
   const primaryReason =
     analysis?.primaryReason ??
+    analysis?.finalDecisionResult?.reasons[0]?.message ??
     (analysis?.summary
       ? analysis.summary.slice(0, 160)
       : "Run an analysis to produce a merge recommendation.");
+
+  const decisionReasons =
+    analysis?.finalDecisionResult?.reasons ?? [];
 
   const overallConfidence = analysis?.overallConfidence ?? null;
   const overallConfidenceReason: ConfidenceReason | null =
@@ -529,7 +567,7 @@ export function AnalysisPanel({
         {effectiveStatus === "completed" && analysis ? (
           <div className="space-y-6">
             <section
-              aria-label="Merge decision"
+              aria-label="Final decision"
               className={cn(
                 "rounded-3xl border p-5 transition-colors",
                 decisionMeta.shell,
@@ -545,6 +583,9 @@ export function AnalysisPanel({
                     <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-current/75">
                       Decision
                     </p>
+                    <p className="font-mono text-xs text-current/70">
+                      {decisionMeta.code}
+                    </p>
                     <p className="text-2xl font-semibold tracking-tight">
                       {decisionMeta.label}
                     </p>
@@ -555,8 +596,24 @@ export function AnalysisPanel({
                 </div>
                 <div className="flex flex-col items-end gap-1 text-right">
                   <Badge variant="outline" className={cn(decisionMeta.badge)}>
-                    {decisionMeta.label}
+                    {decisionMeta.code}
                   </Badge>
+                  {analysis.riskClassification ? (
+                    <p className="font-mono text-xs text-current/90">
+                      Risk {analysis.riskClassification}
+                      {analysis.riskScore != null
+                        ? ` · ${analysis.riskScore}`
+                        : ""}
+                    </p>
+                  ) : null}
+                  {analysis.scopeClassification ? (
+                    <p className="font-mono text-xs text-current/80">
+                      Scope {analysis.scopeClassification}
+                      {analysis.scopeScore != null
+                        ? ` · ${analysis.scopeScore}`
+                        : ""}
+                    </p>
+                  ) : null}
                   {overallConfidence != null ? (
                     <p className="font-mono text-xs text-current/90">
                       Confidence {(overallConfidence * 100).toFixed(0)}%
@@ -565,14 +622,65 @@ export function AnalysisPanel({
                         : ""}
                     </p>
                   ) : null}
-                  {overallConfidenceReason ? (
-                    <p className="max-w-[16rem] text-[11px] leading-snug text-current/80">
-                      {overallConfidenceReason.label}
-                    </p>
-                  ) : null}
                 </div>
               </div>
             </section>
+
+            {/* Stage 4 — Decision Explanation (§22.3) */}
+            {decisionReasons.length > 0 ? (
+              <section
+                aria-label="Decision explanation"
+                className="space-y-3 rounded-3xl border border-border/70 bg-card/70 p-5"
+              >
+                <div>
+                  <h3 className="text-sm font-semibold tracking-tight">
+                    Decision explanation
+                  </h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Why the system produced{" "}
+                    <span className="font-mono font-medium text-foreground">
+                      {decisionMeta.code}
+                    </span>
+                    . Reasons reference risk factors and affected areas from
+                    Stages 2–3 (no extra model calls).
+                  </p>
+                </div>
+                <ul className="space-y-2">
+                  {decisionReasons.map((reason) => (
+                    <li
+                      key={reason.id}
+                      className="flex items-start gap-2.5 rounded-2xl border border-border/60 bg-background/50 px-3 py-2.5 text-sm"
+                    >
+                      <span
+                        className={cn(
+                          "mt-0.5 shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide",
+                          reason.source === "risk_factor" &&
+                            "bg-red-500/10 text-red-800 dark:text-red-200",
+                          reason.source === "scope" &&
+                            "bg-amber-500/10 text-amber-900 dark:text-amber-100",
+                          reason.source === "affected_area" &&
+                            "bg-sky-500/10 text-sky-900 dark:text-sky-100",
+                          reason.source === "impact" &&
+                            "bg-orange-500/10 text-orange-900 dark:text-orange-100",
+                          reason.source === "policy" &&
+                            "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {reason.source.replace(/_/g, " ")}
+                      </span>
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="leading-snug">{reason.message}</p>
+                        {reason.filePath ? (
+                          <p className="truncate font-mono text-[10px] text-muted-foreground">
+                            {reason.filePath}
+                          </p>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
 
             {decisionTrace.length > 0 ? (
               <section aria-label="Decision trace" className="space-y-2">
