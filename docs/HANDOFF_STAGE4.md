@@ -53,10 +53,10 @@
 | Field | Value |
 | --- | --- |
 | **Handoff content + calibration** | **`621c6e7211c879a03d4a07c671f0a9e27a082538`** (`621c6e7`) — handoff body, decision softening, chime |
-| **Absolute tip of this publish chain** | **`7e00846a0fb503040a256a3ff4625efdd32906ab`** (`7e00846`) — **start new threads from this or later** |
+| **Absolute tip of this publish chain** | **`736bfec9c96221617fc86095b5eb9ce4f59ef6eb`** (`736bfec`) — **start new threads from this or later** |
 | **Subject (621c6e7)** | `Document Stage 4 handoff (v0.4.0) and soften over-aggressive BLOCK decisions.` |
 | **Includes beyond Stage 4 pin (`e42ba26`)** | Decision softening / block safety net, clearer completion chime, this handoff document (v0.4.0 metadata) |
-| **Relationship** | `e42ba26` → `621c6e7` → `f148975` → `7e00846` (all on `main`) |
+| **Relationship** | `e42ba26` → `621c6e7` → `f148975` → `7e00846` → `736bfec` (all on `main`) |
 
 **How to verify the Stage 4 pin is in history:**
 
@@ -551,7 +551,7 @@ These can push **BLOCK** / heavy review even when intentional. Future tuning: lo
 | **Branch** | `main` tracking `origin/main` |
 | **Stage 4 feature pin** | `e42ba260e4bfc57ebf489554d1039705f0445ec0` (`e42ba26`) |
 | **Handoff / calibration** | `621c6e7211c879a03d4a07c671f0a9e27a082538` (`621c6e7`) |
-| **Start new threads from** | `7e00846a0fb503040a256a3ff4625efdd32906ab` (`7e00846`) **or later** on `main` |
+| **Start new threads from** | `736bfec9c96221617fc86095b5eb9ce4f59ef6eb` (`736bfec`) **or later** on `main` |
 | **Working tree** | Clean after handoff publish push (verify with `git status`) |
 | **Other branches** | `test/*` evaluation branches; `stage/*` historical; `demo/video-recording` |
 | **Deploy** | Vercel tracks `main`; confirm live SHA after deploys (prod was on Stage 4 after `e42ba26`; later commits include calibration + handoff) |
@@ -560,7 +560,7 @@ These can push **BLOCK** / heavy review even when intentional. Future tuning: lo
 
 - **Verified Stage 4 completion (pin):** `e42ba260e4bfc57ebf489554d1039705f0445ec0`  
 - **Handoff + decision calibration:** `621c6e7211c879a03d4a07c671f0a9e27a082538`  
-- **Handoff tip stamp / default start:** `7e00846a0fb503040a256a3ff4625efdd32906ab`  
+- **Default start (latest handoff publish):** `736bfec9c96221617fc86095b5eb9ce4f59ef6eb`  
 - Stage 4 decision engine core: `2018084`
 
 ---
@@ -692,7 +692,7 @@ These can push **BLOCK** / heavy review even when intentional. Future tuning: lo
 ```text
 Continue Veris (repo: Agent-PR-Firewall / local Agent-Firewal).
 Read docs/HANDOFF_STAGE4.md first, then REQUIREMENTS.md (if present), docs/ROADMAP.md, docs/ARCHITECTURE.md.
-Current tip should be main at or after 7e00846a0fb503040a256a3ff4625efdd32906ab (short 7e00846), which includes handoff 621c6e7 and Stage 4 pin e42ba26. Stages 0–4 are done; implement Stage 5 next.
+Current tip should be main at or after 736bfec9c96221617fc86095b5eb9ce4f59ef6eb (short 736bfec), which includes handoff 621c6e7 and Stage 4 pin e42ba26. Stages 0–4 are done; implement Stage 5 next.
 Do not start Stage 5 agent feedback until planned; respect $0 AI budget and no silent auto-merge.
 Analysis only sees GitHub-pushed PR SHAs, not uncommitted local files.
 ```
@@ -773,10 +773,10 @@ Unless the user re-scopes:
 | **Product version** | **v0.4.0** |
 | **Stage 4 feature complete** | `e42ba260e4bfc57ebf489554d1039705f0445ec0` (`e42ba26`) |
 | **Handoff + decision calibration** | `621c6e7211c879a03d4a07c671f0a9e27a082538` (`621c6e7`) |
-| **Start new threads from** | `7e00846a0fb503040a256a3ff4625efdd32906ab` (`7e00846`) or later on `main` |
+| **Start new threads from** | `736bfec9c96221617fc86095b5eb9ce4f59ef6eb` (`736bfec`) or later on `main` |
 
 The system produces explainable `final_decision` values from **risk + scope + import-graph impact**, persists them (atomic with migration 005), and surfaces reasons in the PR analysis UI. BLOCK is reserved for critical-class risk after calibration.
 
-**Next thread should:** open with this file, confirm `git rev-parse HEAD` is `7e00846` or a descendant, then implement **Stage 5 (agent feedback loop + continued decision calibration)**.
+**Next thread should:** open with this file, confirm `git rev-parse HEAD` is `736bfec` or a descendant (or simply latest `origin/main`), then implement **Stage 5 (agent feedback loop + continued decision calibration)**.
 
 **Canonical handoff path:** `docs/HANDOFF_STAGE4.md`
