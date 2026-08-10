@@ -1,30 +1,20 @@
 /**
- * GitHub Integration Layer — Stage 0 stubs.
- * Full GitHub App, webhooks, and API clients land in Stage 1.
+ * GitHub Integration Layer — Stage 1 public exports.
  */
 
-export const GITHUB_OAUTH_SCOPES = ["read:user", "user:email"] as const;
+export {
+  GITHUB_APP_PERMISSIONS,
+  GITHUB_APP_WEBHOOK_EVENTS,
+  GITHUB_OAUTH_SCOPES,
+  getAppUrl,
+  getGitHubAppInstallUrl,
+  getGitHubAppMissingConfig,
+  getGitHubAppSlug,
+  isGitHubAppConfigured,
+  isGitHubWebhookConfigured,
+} from "@/lib/github/config";
 
-/** Minimum permissions planned for the GitHub App (Stage 1). */
-export const GITHUB_APP_PERMISSIONS = {
-  contents: "read",
-  pull_requests: "write",
-  metadata: "read",
-  checks: "write",
-} as const;
-
-export function getGitHubAppInstallUrl(): string | null {
-  const appSlug = process.env.GITHUB_APP_SLUG;
-  if (!appSlug) {
-    return null;
-  }
-  return `https://github.com/apps/${appSlug}/installations/new`;
-}
-
-export function isGitHubAppConfigured(): boolean {
-  return Boolean(
-    process.env.GITHUB_APP_ID &&
-      process.env.GITHUB_APP_PRIVATE_KEY &&
-      process.env.GITHUB_APP_SLUG,
-  );
-}
+export {
+  createAppOctokit,
+  createInstallationOctokit,
+} from "@/lib/github/app-auth";

@@ -46,6 +46,12 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
+
+  // Webhooks must never be redirected or blocked by session logic.
+  if (pathname.startsWith("/api/github/webhooks")) {
+    return supabaseResponse;
+  }
+
   const isDashboard = pathname.startsWith("/dashboard");
   const isLogin = pathname === "/login";
 

@@ -1,4 +1,4 @@
-import { Shield } from "lucide-react";
+import Image from "next/image";
 
 import { cn } from "@/lib/utils";
 
@@ -13,18 +13,21 @@ export function Logo({
   showWordmark = true,
   size = "md",
 }: LogoProps) {
-  const iconSize = size === "sm" ? "size-7" : "size-8";
+  const logoBoxSize = size === "sm" ? "size-7" : "size-8";
+  const imageSize = size === "sm" ? "28px" : "32px";
   const textSize = size === "sm" ? "text-sm" : "text-base";
 
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
-      <div
-        className={cn(
-          "flex items-center justify-center rounded-lg bg-brand text-brand-foreground shadow-sm",
-          iconSize,
-        )}
-      >
-        <Shield className={size === "sm" ? "size-3.5" : "size-4"} strokeWidth={2.25} />
+      <div className={cn("relative shrink-0", logoBoxSize)}>
+        <Image
+          src="/assets/logo.png"
+          alt="Agent PR Firewall"
+          fill
+          priority={size === "sm"}
+          className="object-contain"
+          sizes={imageSize}
+        />
       </div>
       {showWordmark ? (
         <div className="flex flex-col leading-none">

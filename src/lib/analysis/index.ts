@@ -1,28 +1,38 @@
 /**
- * Analysis engine entrypoint.
- * Stage 0: module boundaries only.
- * Deterministic and LLM-based analysis evolve independently in later stages.
+ * Analysis engine public surface — Stage 2 / 2.5 / 2.6 / 3 / 4.
  */
 
-export type AnalysisEngineModule =
-  | "orchestrator"
-  | "scope"
-  | "impact"
-  | "risk"
-  | "tests"
-  | "change"
-  | "dependency"
-  | "sensitive"
-  | "decision";
+export { runPullRequestAnalysis } from "@/lib/analysis/orchestrator";
+export { classifyFilePath } from "@/lib/analysis/classify";
+export {
+  computeMergeDecision,
+  mergeDecisionLabel,
+  buildRiskBreakdown,
+  isDocumentationOnlyChange,
+} from "@/lib/analysis/decision";
+export {
+  structureFindingEvidence,
+} from "@/lib/analysis/evidence";
+export {
+  buildConfidenceReason,
+  buildOverallConfidenceReason,
+} from "@/lib/analysis/confidence";
+export { analyzeIntentAndScope } from "@/lib/analysis/scope";
+export { classificationLabel } from "@/lib/analysis/scope/classify-pr";
+export { computeRiskFromFindings } from "@/lib/analysis/risk";
+export {
+  computeFinalDecision,
+  finalDecisionLabel,
+  DEFAULT_DECISION_RULES,
+  buildAffectedAreas,
+} from "@/lib/analysis/decision-engine";
+export { analyzeImpact } from "@/lib/analysis/impact";
+export {
+  createDefaultAiProvider,
+  isAiProviderConfigured,
+  getActiveAiProviderName,
+  OpenRouterAnalysisProvider,
+  GeminiAnalysisProvider,
+} from "@/lib/analysis/ai";
+export type * from "@/lib/analysis/types";
 
-export const ANALYSIS_ENGINE_MODULES: AnalysisEngineModule[] = [
-  "orchestrator",
-  "scope",
-  "impact",
-  "risk",
-  "tests",
-  "change",
-  "dependency",
-  "sensitive",
-  "decision",
-];

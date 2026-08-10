@@ -1,124 +1,238 @@
 # Agent PR Firewall
 
-Scope, impact, and risk analysis for autonomous coding-agent pull requests.
+**Scope, impact, and intent analysis for pull requests—especially those written by coding agents.**
 
-> AI coding agents can generate software changes faster than humans can manually understand them. Agent PR Firewall analyzes agent PRs for task-scope compliance, change impact, security-sensitive changes, and overall risk before those changes are trusted.
+Agent PR Firewall is a GitHub-native developer tool that answers a different question than a generic AI code reviewer:
 
-This is **not** a generic AI code reviewer. Its central question:
+> Did the agent (or author) do what was asked, and what else might this change affect?
 
-> Did the agent do what it was asked to do, and what else might this change affect?
+It sits between autonomous coding agents and human merge trust: deterministic change facts first, then bounded AI judgment, then an explainable merge recommendation.
 
-## Current stage
+**Product version:** v0.3.0 (Stage 3 — Scope & Consistency Analysis)
+**License:** Private / portfolio (see [License](#license))
 
-**Stage 0 — Foundation**
+---
 
-- Next.js (App Router) + TypeScript + Tailwind CSS
-- shadcn/ui design system
-- Supabase PostgreSQL schema + RLS
-- GitHub authentication (via Supabase Auth)
-- Protected dashboard shell
-- Repository connection entry points (GitHub App wiring in Stage 1)
+## Why it exists
 
-## Stack
+Coding agents can open PRs faster than humans can re-read them. Code can be green on tests and still:
 
-| Layer | Choice |
-| --- | --- |
-| App | Next.js modular monolith |
-| UI | React, Tailwind, shadcn/ui, Lucide |
-| Auth | GitHub OAuth (Supabase Auth) |
-| Data | Supabase PostgreSQL |
-| Analysis | Modular engine (stubs in Stage 0) |
+- Edit files outside the stated task
+- Touch auth, database, or config without calling it out
+- Skip tests, docs, or rollback paths
+- Look “fine” while increasing blast radius
 
-## Project structure
+Teams need a **scope + risk + intent** layer—not more style nits.
+
+---
+
+## Core workflow
 
 ```text
-src/
-├── app/                 # Routes (landing, auth, dashboard, API)
-├── components/          # UI + layout (no domain business logic)
-├── lib/
-│   ├── auth/            # Session + OAuth actions
-│   ├── supabase/        # Clients + middleware helpers
-│   ├── github/          # GitHub integration (Stage 1+)
-│   └── analysis/        # Modular analysis engines
-├── services/            # Server-side domain services
-├── types/               # Domain + database types
-└── config/              # Site configuration
-supabase/migrations/     # SQL schema
+Sign in with GitHub
+      → Install GitHub App on a repository
+      → Import or ingest pull requests
+      → Open PR detail → Analyze pull request
+      → Review Decision Engine, Scope & Consistency Analysis, findings, evidence
+      → Re-analyze when head SHA moves
 ```
 
-## Setup
+Analysis is **manual** in v0.3.0 (no silent auto-merge or required status checks).
 
-### 1. Install dependencies
+---
+
+## Features
+
+| Area                             | Capability                                                        |
+| -------------------------------- | ----------------------------------------------------------------- |
+| **GitHub**                       | App install, webhooks, PR import without a tunnel                 |
+| **Analysis**                     | SHA-pinned diffs, file classification, bounded AI context         |
+| **Findings**                     | Structured severity/category cards with evidence                  |
+| **Decision Engine**              | Safe to merge · Review recommended · Block merge                  |
+| **Scope & Consistency Analysis** | Task extraction, classification, creep, coverage, missing work    |
+| **Trust UX**                     | Decision trace, confidence reasons, progress steps, notifications |
+| **Cost**                         | Default free OpenRouter model (`cohere/north-mini-code:free`)     |
+
+---
+
+## Screenshots
+
+> Place real captures under `docs/images/` when available.
+
+| Surface                      | Placeholder                         |
+| ---------------------------- | ----------------------------------- |
+| Landing                      | `docs/images/landing.png`           |
+| Dashboard                    | `docs/images/dashboard.png`         |
+| PR analysis — decision       | `docs/images/analysis-decision.png` |
+| PR analysis — intent & scope | `docs/images/analysis-intent.png`   |
+| Findings                     | `docs/images/analysis-findings.png` |
+
+---
+
+## Architecture overview
+
+```text
+Next.js (App Router) modular monolith
+  ├── Dashboard UI (AnalysisPanel)
+  ├── API routes (/api/github/*, /api/analysis/*)
+  ├── Services (installations, PRs, analyses)
+  └── Analysis engine
+        collect → scope & consistency → context → AI → calibrate → Decision Engine → persist
+
+GitHub App (Octokit)     Supabase (Auth + Postgres + RLS)
+OpenRouter free model    (optional Gemini free tier)
+```
+
+Deep dive: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+
+---
+
+## Local setup
+
+### Prerequisites
+
+- Node.js 20+
+- npm
+- Supabase project
+- GitHub account + ability to create a GitHub App
+- OpenRouter account (free key)
+
+### Install
 
 ```bash
+git clone https://github.com/Fraol-D/Agent-PR-Firewall.git
+cd Agent-PR-Firewall   # local folder may be named Agent-Firewal
 npm install
-```
-
-### 2. Environment variables
-
-```bash
 cp .env.example .env.local
 ```
 
-Fill in:
+### Database
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `NEXT_PUBLIC_APP_URL` (default `http://localhost:3000`)
+In the Supabase SQL editor, apply migrations **in order**:
 
-### 3. Supabase project
+1. `supabase/migrations/001_initial_schema.sql`
+2. `supabase/migrations/002_stage1_github_integration.sql`
+3. `supabase/migrations/003_stage2_analysis_pipeline.sql`
+4. `supabase/migrations/004_stage2_5_hardening.sql`
 
-1. Create a Supabase project.
-2. Run `supabase/migrations/001_initial_schema.sql` in the SQL editor.
-3. Enable **GitHub** under Authentication → Providers.
-4. Create a GitHub OAuth App (or use GitHub App OAuth credentials):
-   - Homepage: `http://localhost:3000`
-   - Authorization callback URL: `https://<project-ref>.supabase.co/auth/v1/callback`
-5. Copy Client ID / Secret into Supabase GitHub provider settings.
-
-### 4. Run locally
+### Run
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open `http://localhost:3000` → sign in → connect a repo → import PRs → analyze.
 
-## Stage 0 acceptance criteria
+---
 
-| Criterion | Status |
-| --- | --- |
-| Open the application | Landing page |
-| Sign in with GitHub | `/login` + Supabase OAuth |
-| Access protected dashboard | Middleware + `/dashboard` |
-| See application shell | Sidebar, header, overview |
-| Begin connecting a repository | `/dashboard/repositories` flow |
+## Environment variables
 
-## Development stages (from REQUIREMENTS.md)
+Copy from [`.env.example`](.env.example). Never commit `.env.local` or PEM keys.
 
-0. Foundation ← **current**
-1. GitHub Integration
-2. Deterministic Analysis
-3. Task-Scope Analysis
-4. Decision Engine
-5. Agent Feedback Loop
-6. Portfolio and Product Polish
+| Variable                        | Required         | Purpose                                        |
+| ------------------------------- | ---------------- | ---------------------------------------------- |
+| `NEXT_PUBLIC_APP_URL`           | Yes              | App origin (`http://localhost:3000` or tunnel) |
+| `NEXT_PUBLIC_SUPABASE_URL`      | Yes              | Supabase project URL                           |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes              | Public anon key                                |
+| `SUPABASE_SERVICE_ROLE_KEY`     | Yes (server)     | Webhooks + analysis writes                     |
+| `GITHUB_APP_ID`                 | Yes              | GitHub App ID                                  |
+| `GITHUB_APP_SLUG`               | Yes              | App slug for install URL                       |
+| `GITHUB_APP_PRIVATE_KEY_PATH`   | Yes\*            | Path to App PEM (preferred)                    |
+| `GITHUB_APP_PRIVATE_KEY`        | Alt              | Full PEM if not using path                     |
+| `GITHUB_APP_WEBHOOK_SECRET`     | Yes              | HMAC for webhooks                              |
+| `OPENROUTER_API_KEY`            | Yes for analysis | Server-only AI key                             |
+| `OPENROUTER_MODEL`              | Optional         | Default `cohere/north-mini-code:free`          |
+| `AI_PROVIDER`                   | Optional         | `openrouter` (default) or `gemini`             |
 
-## Scripts
+\* Prefer `secrets/github-app.pem` (gitignored).
+
+---
+
+## GitHub App setup
+
+1. Create a GitHub App: [Developer settings → GitHub Apps](https://github.com/settings/apps).
+2. Configure:
+
+| Field              | Value                               |
+| ------------------ | ----------------------------------- |
+| Homepage URL       | `{APP_URL}`                         |
+| Setup URL          | `{APP_URL}/api/github/setup`        |
+| Webhook URL        | `{APP_URL}/api/github/webhooks`     |
+| Webhook secret     | Same as `GITHUB_APP_WEBHOOK_SECRET` |
+| Redirect on update | Enabled                             |
+
+3. **Permissions (repo):** Metadata read, Contents read, Pull requests read.
+4. **Events:** Installation, Installation repositories, Pull request.
+5. Install the app on a test repository from the product **Repositories** page.
+
+**User sign-in** uses Supabase GitHub OAuth (identity only)—not a user PAT for repo access.
+
+**Local webhooks:** GitHub cannot reach `localhost`. Use ngrok/cloudflared **or** dashboard **Import PRs**.
+
+---
+
+## OpenRouter setup
+
+1. Create a key: https://openrouter.ai/keys
+2. Set `OPENROUTER_API_KEY` in `.env.local`.
+3. Keep `OPENROUTER_MODEL=cohere/north-mini-code:free` for $0 development.
+4. Optional: `AI_PROVIDER=gemini` + `GEMINI_API_KEY` (not default).
+
+---
+
+## Development workflow
 
 ```bash
-npm run dev      # development server
-npm run build    # production build
-npm run start    # start production server
+npm run dev      # local server
 npm run lint     # ESLint
+npm run build    # production build
 ```
 
-## Security
+Conventions:
 
-- Request minimum GitHub OAuth scopes for sign-in (`read:user`, `user:email`).
-- Repository access is intended via GitHub App permissions (Stage 1), not broad OAuth repo scopes.
-- Secrets stay server-side; RLS enforces per-user data access.
+- Business logic in `src/services/` and `src/lib/`; thin routes
+- Deterministic analysis before LLM
+- No secrets in git (`secrets/`, `.env*`, `*.pem`)
+- Feature work on short-lived branches; keep `main` product-ready
+
+See [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) and [`docs/TESTING.md`](docs/TESTING.md).
+
+---
+
+## Documentation map
+
+| Doc                                                  | Contents                     |
+| ---------------------------------------------------- | ---------------------------- |
+| [`docs/PRD.md`](docs/PRD.md)                         | Product requirements         |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)       | System design                |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md)                 | Stages 0–6                   |
+| [`docs/DECISION_ENGINE.md`](docs/DECISION_ENGINE.md) | Merge recommendation rules   |
+| [`docs/TESTING.md`](docs/TESTING.md)                 | PR test scenarios            |
+| [`docs/HANDOFF_STAGE3.md`](docs/HANDOFF_STAGE3.md)   | Engineering handoff          |
+| [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md)       | How to contribute            |
+| [`docs/STAGE_3_REPORT.md`](docs/STAGE_3_REPORT.md)   | Stage 3 implementation notes |
+
+---
+
+## Roadmap (summary)
+
+| Stage                            | Status        |
+| -------------------------------- | ------------- |
+| 0 Foundation                     | Done          |
+| 1 GitHub integration             | Done          |
+| 2 PR analysis pipeline           | Done          |
+| 2.5 Hardening                    | Done          |
+| 2.6 UX & trust                   | Done          |
+| 3 Scope & Consistency Analysis   | Done (v0.3.0) |
+| 4 Decision engine productization | Next          |
+| 5 Agent feedback loop            | Planned       |
+| 6 Portfolio polish               | Planned       |
+
+Details: [`docs/ROADMAP.md`](docs/ROADMAP.md)
+
+---
 
 ## License
 
-Private / portfolio project unless otherwise stated.
+Private / portfolio project unless otherwise stated by the repository owner.
+Not an official GitHub or OpenRouter product.
