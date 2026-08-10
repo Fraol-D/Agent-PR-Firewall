@@ -1,5 +1,6 @@
 /**
- * Stage 4 Decision Engine — pure fusion of Stage 2 risk + Stage 3 scope.
+ * Stage 4 Decision Engine — pure fusion of Stage 2 risk + Stage 3 scope
+ * + Stage impact (import-graph blast radius).
  * No LLM calls.
  */
 
@@ -13,18 +14,17 @@ import type {
   DecisionEngineResult,
   DecisionReason,
 } from "@/lib/analysis/decision-engine/types";
-import type { ImpactClassification } from "@/types/domain";
+import type { Decision, ImpactClassification } from "@/types/domain";
 
 /**
- * Combine risk + scope (+ light impact signals) into a final decision + reasons.
+ * Combine risk + scope into a base decision, then apply HIGH-impact escalation.
  */
 export function computeFinalDecision(
   input: DecisionEngineInput,
   rules: DecisionRule[] = DEFAULT_DECISION_RULES,
 ): DecisionEngineResult {
-  const impactClassification =
-    input.impactClassification ??
-    deriveImpactClassification(input);
+  const impactClassification: ImpactClassification =
+    input.impactClassification ?? "UNKNOWN";
 
   const rule = matchDecisionRule(
     input.riskClassification,
@@ -32,24 +32,8 @@ export function computeFinalDecision(
     rules,
   );
 
-  // Escalation: high blast radius + already elevated risk → at least REVIEW_REQUIRED
   let finalDecision = rule.decision;
   let matchedRuleId = rule.id;
-
-  if (
-    impactClassification === "HIGH" &&
-    (input.riskClassification === "HIGH" ||
-      input.riskClassification === "MEDIUM") &&
-    finalDecision !== "BLOCKED"
-  ) {
-    if (
-      finalDecision === "LOW" ||
-      finalDecision === "REVIEW_RECOMMENDED"
-    ) {
-      finalDecision = "REVIEW_REQUIRED";
-      matchedRuleId = `${rule.id}+impact-escalation`;
-    }
-  }
 
   // Scope creep with medium+ risk escalates recommended → required
   if (
@@ -63,9 +47,24 @@ export function computeFinalDecision(
     matchedRuleId = `${matchedRuleId}+scope-creep-escalation`;
   }
 
-  const reasons = buildReasons(input, finalDecision, matchedRuleId, impactClassification);
+  // Genuine third input: HIGH import-graph impact escalates one level
+  // independent of whether risk/scope already saw "sensitive" tags.
+  if (impactClassification === "HIGH") {
+    const escalated = escalateOneLevel(finalDecision);
+    if (escalated !== finalDecision) {
+      matchedRuleId = `${matchedRuleId}+high-impact-escalation`;
+      finalDecision = escalated;
+    }
+  }
 
-  const summary = `Decision ${finalDecision} from risk ${input.riskClassification} (${input.riskScore}) and scope ${input.scopeClassification} (${input.scopeScore}).`;
+  const reasons = buildReasons(
+    input,
+    finalDecision,
+    matchedRuleId,
+    impactClassification,
+  );
+
+  const summary = `Decision ${finalDecision} from risk ${input.riskClassification} (${input.riskScore}), scope ${input.scopeClassification} (${input.scopeScore}), impact ${impactClassification}.`;
 
   return {
     finalDecision,
@@ -80,49 +79,44 @@ export function computeFinalDecision(
   };
 }
 
-function deriveImpactClassification(
-  input: DecisionEngineInput,
-): ImpactClassification {
-  const areaCount = input.affectedAreas.length;
-  const sensitiveHits = (input.sensitiveAreas ?? []).length;
-  const highImpactTypes = input.affectedAreas.filter((a) =>
-    /authentication|database|security|infrastructure/i.test(a.affectedArea),
-  ).length;
-
-  if (highImpactTypes >= 3 || (sensitiveHits >= 2 && areaCount >= 8)) {
-    return "HIGH";
+/** One-level severity increase for HIGH blast radius. */
+export function escalateOneLevel(decision: Decision): Decision {
+  switch (decision) {
+    case "LOW":
+      return "REVIEW_RECOMMENDED";
+    case "REVIEW_RECOMMENDED":
+      return "REVIEW_REQUIRED";
+    case "REVIEW_REQUIRED":
+      return "BLOCKED";
+    case "BLOCKED":
+      return "BLOCKED";
   }
-  if (highImpactTypes >= 1 || areaCount >= 5 || sensitiveHits >= 1) {
-    return "MEDIUM";
-  }
-  if (areaCount === 0) return "UNKNOWN";
-  return "LOW";
 }
 
 function buildReasons(
   input: DecisionEngineInput,
-  decision: DecisionEngineResult["finalDecision"],
+  decision: Decision,
   ruleId: string,
   impact: ImpactClassification,
 ): DecisionReason[] {
   const reasons: DecisionReason[] = [];
 
-  // Policy / matrix
   reasons.push({
     id: "policy-matrix",
-    message: `Policy rule "${ruleId}" maps risk ${input.riskClassification} × scope ${input.scopeClassification} → ${decision}.`,
+    message: `Policy rule maps risk ${input.riskClassification} × scope ${input.scopeClassification} (base), then impact ${impact} → ${decision} (rule ${ruleId}).`,
     source: "policy",
     ruleId,
   });
 
-  // Risk factors (highest severity first)
   const sortedFactors = [...input.riskFactors].sort(
     (a, b) => severityRank(b.severity) - severityRank(a.severity),
   );
 
   for (const factor of sortedFactors.slice(0, 5)) {
-    if (severityRank(factor.severity) < severityRank("medium") && sortedFactors.length > 3) {
-      // Skip low/info when we already have enough stronger factors
+    if (
+      severityRank(factor.severity) < severityRank("medium") &&
+      sortedFactors.length > 3
+    ) {
       if (reasons.filter((r) => r.source === "risk_factor").length >= 2) continue;
     }
     const fileNote = factor.sourceFile ? ` in ${factor.sourceFile}` : "";
@@ -138,10 +132,7 @@ function buildReasons(
     });
   }
 
-  if (
-    sortedFactors.length === 0 &&
-    input.riskClassification !== "LOW"
-  ) {
+  if (sortedFactors.length === 0 && input.riskClassification !== "LOW") {
     reasons.push({
       id: "risk-aggregate",
       message: `Aggregate risk classification is ${input.riskClassification} (score ${input.riskScore}/100).`,
@@ -150,7 +141,6 @@ function buildReasons(
     });
   }
 
-  // Scope
   if (input.scopeClassification === "LOW_COMPLIANCE") {
     reasons.push({
       id: "scope-low",
@@ -161,14 +151,14 @@ function buildReasons(
   } else if (input.scopeClassification === "PARTIAL") {
     reasons.push({
       id: "scope-partial",
-      message: `Partial scope compliance (scope score ${input.scopeScore}/100). Implementation only partially matches the stated task.`,
+      message: `Partial scope compliance (scope score ${input.scopeScore}/100).`,
       source: "scope",
       ruleId,
     });
   } else if (input.scopeClassification === "HIGH_COMPLIANCE") {
     reasons.push({
       id: "scope-high",
-      message: `Scope compliance is high (score ${input.scopeScore}/100) — changes largely match the stated task.`,
+      message: `Scope compliance is high (score ${input.scopeScore}/100).`,
       source: "scope",
       ruleId,
     });
@@ -186,30 +176,56 @@ function buildReasons(
     reasons.push({
       id: "scope-creep",
       message: sample
-        ? `Scope creep detected in files outside the expected task areas (e.g. ${sample}).`
-        : "Scope creep detected: files outside the expected task areas were modified.",
+        ? `Scope creep detected (e.g. ${sample}).`
+        : "Scope creep detected outside expected task areas.",
       source: "scope",
       ruleId,
     });
   }
 
-  // Affected areas — prefer sensitive / creep
+  // Impact / blast radius (import graph)
+  if (input.impactExplanation) {
+    reasons.push({
+      id: "impact-graph",
+      message: `Blast radius ${impact}: ${input.impactExplanation}${
+        input.impactConfidence != null
+          ? ` Confidence ${input.impactConfidence}.`
+          : ""
+      }`,
+      source: "impact",
+      ruleId,
+    });
+  } else if (impact === "HIGH") {
+    reasons.push({
+      id: "impact-high",
+      message:
+        "High potential blast radius from import-graph dependents (decision escalated one level).",
+      source: "impact",
+      ruleId,
+    });
+  } else if (impact === "MEDIUM") {
+    reasons.push({
+      id: "impact-medium",
+      message: "Moderate blast radius — multiple reverse dependents detected.",
+      source: "impact",
+      ruleId,
+    });
+  }
+
+  // Prefer graph-backed dependent rows over category-only
   const notableAreas = [...input.affectedAreas]
-    .filter(
-      (a) =>
-        a.impactType === "scope_creep" ||
-        /authentication|database|security|infrastructure|configuration/i.test(
-          a.affectedArea,
-        ),
+    .filter((a) =>
+      /dependent|route|blast/i.test(a.impactType) ||
+      /authentication|database|security|route/i.test(a.affectedArea),
     )
-    .slice(0, 4);
+    .slice(0, 5);
 
   for (const area of notableAreas) {
     reasons.push({
       id: `area-${slug(area.filePath)}`,
       message:
         area.explanation ||
-        `${titleCase(area.affectedArea)} area touched via ${area.filePath} (${area.impactType.replace(/_/g, " ")}).`,
+        `${titleCase(area.affectedArea)}: ${area.filePath} (${area.impactType.replace(/_/g, " ")}).`,
       source: "affected_area",
       affectedArea: area.affectedArea,
       filePath: area.filePath,
@@ -217,33 +233,17 @@ function buildReasons(
     });
   }
 
-  if (impact === "HIGH") {
-    reasons.push({
-      id: "impact-high",
-      message: "High potential blast radius across sensitive or many repository areas.",
-      source: "impact",
-      ruleId,
-    });
-  } else if (impact === "MEDIUM" && decision !== "LOW") {
-    reasons.push({
-      id: "impact-medium",
-      message: "Moderate blast radius — multiple modules or sensitive surfaces are involved.",
-      source: "impact",
-      ruleId,
-    });
-  }
-
-  // Ensure at least one plain reason beyond pure policy for empty inputs
   if (reasons.length === 1 && decision === "LOW") {
     reasons.push({
       id: "all-clear",
-      message: "No high-severity risk factors or significant scope deviations were detected.",
+      message:
+        "No high-severity risk factors, major scope deviation, or high blast radius detected.",
       source: "policy",
       ruleId,
     });
   }
 
-  return reasons.slice(0, 12);
+  return reasons.slice(0, 14);
 }
 
 function formatRiskReason(
@@ -292,8 +292,7 @@ function titleCase(s: string): string {
   return s.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** Labels for UI display. */
-export function finalDecisionLabel(decision: DecisionEngineResult["finalDecision"]): string {
+export function finalDecisionLabel(decision: Decision): string {
   switch (decision) {
     case "LOW":
       return "Low risk";

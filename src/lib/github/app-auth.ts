@@ -13,7 +13,7 @@ function requireAppCredentials() {
 
   if (!appId || !privateKey) {
     throw new Error(
-      "GitHub App credentials missing. Check GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY.",
+      "GitHub App credentials missing. Set GITHUB_APP_ID and either GITHUB_APP_PRIVATE_KEY_PATH (local PEM file) or GITHUB_APP_PRIVATE_KEY (multiline or \\n-escaped PEM).",
     );
   }
 

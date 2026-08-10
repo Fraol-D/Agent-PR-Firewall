@@ -13,6 +13,7 @@ export type AnalysisLogEvent =
   | "zod_validation"
   | "decision_computed"
   | "final_decision_computed"
+  | "impact_analysis_completed"
   | "scope_analysis_completed"
   | "persistence_completed"
   | "analysis_failed"

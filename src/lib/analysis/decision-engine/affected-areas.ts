@@ -1,6 +1,9 @@
 /**
- * Build affected-area records from Stage 2/3 outputs for §21.7 persistence
- * and decision reasons. Deterministic — no LLM.
+ * Affected-area drafts (§21.7).
+ *
+ * Prefer graph-backed rows from the impact engine. The legacy
+ * sensitivity/category builder remains only as a fallback when the
+ * import graph could not run.
  */
 
 import type { DeterministicAnalysisResult } from "@/lib/analysis/types";
@@ -14,6 +17,10 @@ export interface AffectedAreaDraft {
   explanation: string;
 }
 
+/**
+ * @deprecated Prefer ImpactAnalysisResult.affectedAreas from analyzeImpact().
+ * Legacy fallback: category tags + scope creep only (no import graph).
+ */
 export function buildAffectedAreas(input: {
   deterministic: DeterministicAnalysisResult;
   intentScope?: IntentScopeResult | null;
@@ -28,14 +35,13 @@ export function buildAffectedAreas(input: {
       filePath: file.path,
       affectedArea: areaLabel,
       impactType: isCreep ? "scope_creep" : mapStatus(file.status),
-      confidence: isCreep ? 0.85 : 0.7,
+      confidence: isCreep ? 0.85 : 0.55,
       explanation: isCreep
         ? `${file.path} is outside the expected task areas (${areaLabel}).`
-        : `${titleCase(file.status)} ${areaLabel.toLowerCase()} file (${file.category}).`,
+        : `${titleCase(file.status)} ${areaLabel.toLowerCase()} file (${file.category}) — import graph unavailable; category-only estimate.`,
     });
   }
 
-  // Cap for storage/UI
   return areas.slice(0, 80);
 }
 

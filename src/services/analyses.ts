@@ -149,14 +149,27 @@ function recomputeFinalDecisionFromStored(input: {
     intent?.scopeClassificationDb ??
     "UNKNOWN") as ScopeClassification;
 
+  const stats = (input.row.context_stats ?? null) as {
+    impact?: {
+      classification?: string;
+      confidence?: number;
+      explanation?: string;
+    };
+  } | null;
+
+  const impactClassification =
+    (input.row.impact_classification as DecisionEngineResult["impactClassification"]) ??
+    (stats?.impact?.classification as DecisionEngineResult["impactClassification"]) ??
+    null;
+
   return computeFinalDecision({
     riskScore,
     riskClassification,
     scopeScore,
     scopeClassification,
-    impactClassification:
-      (input.row.impact_classification as DecisionEngineResult["impactClassification"]) ??
-      null,
+    impactClassification,
+    impactConfidence: stats?.impact?.confidence ?? null,
+    impactExplanation: stats?.impact?.explanation ?? null,
     riskFactors: risk.factors,
     affectedAreas: input.affectedAreas.map((a) => ({
       filePath: a.filePath,
@@ -858,9 +871,17 @@ async function executeAnalysisJob(job: {
       metadata: (f.metadata ?? {}) as Json,
     }));
 
-    // Atomic persistence (Postgres function transaction).
-    // Fallback to sequential+cleanup if RPC is not migrated yet.
-    const rpcArgs = {
+    const affectedAreasJson = result.affectedAreas.map((a) => ({
+      file_path: a.filePath,
+      affected_area: a.affectedArea,
+      impact_type: a.impactType,
+      confidence: a.confidence,
+      explanation: a.explanation ?? "",
+    }));
+
+    // Atomic persistence: findings + factors + affected areas + final_decision
+    // (migration 005). Fallback sequential path if RPC not yet applied.
+    const rpcArgs: Record<string, unknown> = {
       p_analysis_id: job.analysisId,
       p_pull_request_id: job.pullRequestId,
       p_head_sha: job.headSha,
@@ -878,13 +899,22 @@ async function executeAnalysisJob(job: {
         headSha: result.headSha,
         intentScope: result.intentScope,
         decisionEngine: result.finalDecision,
+        impact: {
+          classification: result.impact.impactClassification,
+          confidence: result.impact.confidence,
+          explanation: result.impact.explanation,
+          directDependents: result.impact.directDependencyCount,
+          totalDependents: result.impact.totalDependencyCount,
+          routes: result.impact.affectedRoutes,
+          graphMeta: result.impact.graphMeta,
+        },
       } as unknown as Json,
       p_risk_classification: result.risk.riskClassification,
       p_duration_ms: durationMs,
       p_changed_files: changedFilesJson as unknown as Json,
       p_findings: findingsJson as unknown as Json,
       p_risk_factors: riskFactorsJson as unknown as Json,
-      p_event_message: `Analysis completed with ${result.ai.findings.length} finding(s); decision ${result.finalDecision.finalDecision}`,
+      p_event_message: `Analysis completed with ${result.ai.findings.length} finding(s); decision ${result.finalDecision.finalDecision}; impact ${result.impact.impactClassification}`,
       p_event_metadata: {
         overall_status: result.ai.overallStatus,
         findings: result.ai.findings.length,
@@ -894,10 +924,16 @@ async function executeAnalysisJob(job: {
         scope_score: result.intentScope.scopeScore,
         final_decision: result.finalDecision.finalDecision,
         risk_score: result.risk.riskScore,
+        impact_classification: result.impact.impactClassification,
       } as unknown as Json,
+      p_risk_score: result.risk.riskScore,
+      p_scope_score: result.intentScope.scopeScore,
+      p_scope_classification: result.intentScope.scopeClassificationDb,
+      p_impact_classification: result.finalDecision.impactClassification,
+      p_final_decision: result.finalDecision.finalDecision,
+      p_affected_areas: affectedAreasJson as unknown as Json,
     };
 
-    // Typed client may not know custom RPCs until types are regenerated.
     const { error: persistError } = await (
       admin as unknown as {
         rpc: (
@@ -908,43 +944,11 @@ async function executeAnalysisJob(job: {
     ).rpc("complete_analysis_atomic", rpcArgs);
 
     if (persistError) {
-      if (/function .* does not exist|schema cache/i.test(persistError.message)) {
+      if (/function .* does not exist|schema cache|could not find/i.test(persistError.message)) {
         await persistAnalysisSequential(admin, job, result, durationMs);
       } else {
         await cleanupAnalysisChildren(admin, job.analysisId);
         throw new Error(`Atomic persistence failed: ${persistError.message}`);
-      }
-    }
-
-    // Stage 3/4 columns (not all part of atomic RPC signature)
-    await admin
-      .from("analyses")
-      .update({
-        scope_score: result.intentScope.scopeScore,
-        scope_classification: result.intentScope.scopeClassificationDb,
-        risk_score: result.risk.riskScore,
-        risk_classification: result.risk.riskClassification,
-        impact_classification: result.finalDecision.impactClassification,
-        final_decision: result.finalDecision.finalDecision,
-      })
-      .eq("id", job.analysisId)
-      .eq("head_sha", job.headSha);
-
-    // §21.7 affected areas
-    await admin.from("affected_areas").delete().eq("analysis_id", job.analysisId);
-    if (result.affectedAreas.length > 0) {
-      const { error: areasError } = await admin.from("affected_areas").insert(
-        result.affectedAreas.map((a) => ({
-          analysis_id: job.analysisId,
-          file_path: a.filePath,
-          affected_area: a.affectedArea,
-          impact_type: a.impactType,
-          confidence: a.confidence,
-          explanation: a.explanation,
-        })),
-      );
-      if (areasError) {
-        console.error("Failed to persist affected areas:", areasError.message);
       }
     }
 
@@ -1161,6 +1165,15 @@ async function persistAnalysisSequential(
         headSha: result.headSha,
         intentScope: result.intentScope,
         decisionEngine: result.finalDecision,
+        impact: {
+          classification: result.impact.impactClassification,
+          confidence: result.impact.confidence,
+          explanation: result.impact.explanation,
+          directDependents: result.impact.directDependencyCount,
+          totalDependents: result.impact.totalDependencyCount,
+          routes: result.impact.affectedRoutes,
+          graphMeta: result.impact.graphMeta,
+        },
       } as unknown as Json,
       error_message: null,
       risk_score: result.risk.riskScore,

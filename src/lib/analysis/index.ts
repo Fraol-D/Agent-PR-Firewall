@@ -26,6 +26,7 @@ export {
   DEFAULT_DECISION_RULES,
   buildAffectedAreas,
 } from "@/lib/analysis/decision-engine";
+export { analyzeImpact } from "@/lib/analysis/impact";
 export {
   createDefaultAiProvider,
   isAiProviderConfigured,

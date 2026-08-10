@@ -14,6 +14,7 @@ import {
   type AffectedAreaDraft,
   type DecisionEngineResult,
 } from "@/lib/analysis/decision-engine";
+import { analyzeImpact, type ImpactAnalysisResult } from "@/lib/analysis/impact";
 import { logAnalysis } from "@/lib/analysis/log";
 import { computeRiskFromFindings, type RiskAnalysisResult } from "@/lib/analysis/risk";
 import { analyzeIntentAndScope } from "@/lib/analysis/scope";
@@ -61,6 +62,8 @@ export interface RunAnalysisOutput {
   intentScope: IntentScopeResult;
   /** Stage 2 risk engine output (deterministic from findings). */
   risk: RiskAnalysisResult;
+  /** Import-graph blast radius (independent of risk/scope tags). */
+  impact: ImpactAnalysisResult;
   /** Stage 4 decision engine (no LLM). */
   finalDecision: DecisionEngineResult;
   /** §21.7 affected areas drafts for persistence. */
@@ -191,17 +194,42 @@ export async function runPullRequestAnalysis(
   // Stage 2 risk (deterministic from findings + sensitive areas)
   const risk = computeRiskFromFindings(calibratedFindings, deterministic);
 
-  const affectedAreas = buildAffectedAreas({
-    deterministic,
-    intentScope,
+  // Blast radius via reverse import graph (fresh GitHub tree @ headSha)
+  const impact = await analyzeImpact({
+    owner: input.owner,
+    repo: input.repo,
+    installationId: input.installationId,
+    headSha: pinnedHead,
+    changedFiles: deterministic.changedFiles,
   });
 
-  // Stage 4 — final decision from risk × scope (no LLM)
+  logAnalysis("impact_analysis_completed", {
+    analysisId: input.analysisId,
+    pullRequestId: input.pullRequestId,
+    headSha: pinnedHead,
+    impactClassification: impact.impactClassification,
+    impactConfidence: impact.confidence,
+    directDependents: impact.directDependencyCount,
+    totalDependents: impact.totalDependencyCount,
+    truncated: impact.graphMeta.truncated,
+    ok: true,
+  });
+
+  // Prefer graph-backed affected areas; fallback to category-only if empty
+  const affectedAreas: AffectedAreaDraft[] =
+    impact.affectedAreas.length > 0
+      ? impact.affectedAreas
+      : buildAffectedAreas({ deterministic, intentScope });
+
+  // Stage 4 — risk × scope, then HIGH-impact one-level escalation (no LLM)
   const finalDecision = computeFinalDecision({
     riskScore: risk.riskScore,
     riskClassification: risk.riskClassification,
     scopeScore: intentScope.scopeScore,
     scopeClassification: intentScope.scopeClassificationDb,
+    impactClassification: impact.impactClassification,
+    impactConfidence: impact.confidence,
+    impactExplanation: impact.explanation,
     riskFactors: risk.factors,
     affectedAreas,
     scopeCreepDetected: intentScope.scopeCreepDetected,
@@ -246,6 +274,7 @@ export async function runPullRequestAnalysis(
     scopeClassification: intentScope.scopeClassificationDb,
     riskScore: risk.riskScore,
     scopeScore: intentScope.scopeScore,
+    impactClassification: impact.impactClassification,
     ok: true,
   });
 
@@ -255,6 +284,7 @@ export async function runPullRequestAnalysis(
     ai,
     intentScope,
     risk,
+    impact,
     finalDecision,
     affectedAreas,
     baseSha,

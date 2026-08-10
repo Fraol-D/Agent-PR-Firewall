@@ -39,8 +39,10 @@ export interface DecisionEngineInput {
   riskClassification: RiskClassification;
   scopeScore: number;
   scopeClassification: ScopeClassification;
-  /** Optional impact hint (Stage 2.x blast radius signals). */
+  /** Import-graph blast radius (genuine third input). */
   impactClassification?: ImpactClassification | null;
+  impactConfidence?: number | null;
+  impactExplanation?: string | null;
   riskFactors: Array<{
     category: string;
     severity: string;
