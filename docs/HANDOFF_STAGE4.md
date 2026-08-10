@@ -52,8 +52,10 @@
 
 | Field | Value |
 | --- | --- |
-| **Latest `main` tip at handoff publish** | *(filled after push — see section end / git log)* |
-| **Includes beyond Stage 4 pin** | Decision softening / block safety net, clearer completion chime, this handoff document |
+| **Latest `main` tip at handoff publish** | **`621c6e7211c879a03d4a07c671f0a9e27a082538`** (`621c6e7`) |
+| **Subject** | `Document Stage 4 handoff (v0.4.0) and soften over-aggressive BLOCK decisions.` |
+| **Includes beyond Stage 4 pin (`e42ba26`)** | Decision softening / block safety net, clearer completion chime, this handoff document (v0.4.0 metadata) |
+| **Relationship** | Descendant of Stage 4 pin: `e42ba26` ⊂ `621c6e7` history |
 
 **How to verify the Stage 4 pin is in history:**
 
@@ -546,8 +548,9 @@ These can push **BLOCK** / heavy review even when intentional. Future tuning: lo
 | Item | Value |
 | --- | --- |
 | **Branch** | `main` tracking `origin/main` |
-| **Tip (as of handoff)** | `e42ba260e4bfc57ebf489554d1039705f0445ec0` (`e42ba26`) — **verified Stage 4 completion** |
-| **Working tree** | Clean after that push (verify with `git status`) |
+| **Stage 4 feature pin** | `e42ba260e4bfc57ebf489554d1039705f0445ec0` (`e42ba26`) |
+| **Handoff / calibration tip** | `621c6e7211c879a03d4a07c671f0a9e27a082538` (`621c6e7`) — **start new threads from this or later** |
+| **Working tree** | Clean after handoff publish push (verify with `git status`) |
 | **Other branches** | `test/*` evaluation branches; `stage/*` historical; `demo/video-recording` |
 | **Deploy** | Vercel production used for App auth; redeploy after each `main` push |
 
@@ -686,7 +689,7 @@ These can push **BLOCK** / heavy review even when intentional. Future tuning: lo
 ```text
 Continue Veris (repo: Agent-PR-Firewall / local Agent-Firewal).
 Read docs/HANDOFF_STAGE4.md first, then REQUIREMENTS.md (if present), docs/ROADMAP.md, docs/ARCHITECTURE.md.
-Current tip should be main at or after e42ba260e4bfc57ebf489554d1039705f0445ec0 (short e42ba26). Stages 0–4 are done.
+Current tip should be main at or after 621c6e7211c879a03d4a07c671f0a9e27a082538 (short 621c6e7), which includes Stage 4 pin e42ba26. Stages 0–4 are done; implement Stage 5 next.
 Do not start Stage 5 agent feedback until planned; respect $0 AI budget and no silent auto-merge.
 Analysis only sees GitHub-pushed PR SHAs, not uncommitted local files.
 ```
@@ -760,11 +763,15 @@ Unless the user re-scopes:
 
 ## 20. Handoff complete
 
-**Stage 4 is complete on `main`.**  
-**Verified Stage 4 completion commit:** `e42ba260e4bfc57ebf489554d1039705f0445ec0` (`e42ba26`).
+**Stage 4 is complete on `main` (product v0.4.0).**  
 
-The system produces explainable `final_decision` values from **risk + scope + import-graph impact**, persists them (atomic with migration 005), and surfaces reasons in the PR analysis UI.
+| Pin | Hash |
+| --- | --- |
+| **Stage 4 feature complete** | `e42ba260e4bfc57ebf489554d1039705f0445ec0` (`e42ba26`) |
+| **Handoff + decision calibration publish** | `621c6e7211c879a03d4a07c671f0a9e27a082538` (`621c6e7`) |
 
-**Next thread should:** open with this file, confirm `git rev-parse HEAD` is that commit or a descendant, then either (A) start **Stage 5 agent feedback**, or (B) decision-quality / Veris branding / docs sync — per product priority.
+The system produces explainable `final_decision` values from **risk + scope + import-graph impact**, persists them (atomic with migration 005), and surfaces reasons in the PR analysis UI. BLOCK is reserved for critical-class risk after calibration.
+
+**Next thread should:** open with this file, confirm `git rev-parse HEAD` is `621c6e7` or a descendant, then implement **Stage 5 (agent feedback loop + continued decision calibration)**.
 
 **Canonical handoff path:** `docs/HANDOFF_STAGE4.md`
