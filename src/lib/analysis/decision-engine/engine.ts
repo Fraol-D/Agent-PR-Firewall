@@ -35,11 +35,11 @@ export function computeFinalDecision(
   let finalDecision = rule.decision;
   let matchedRuleId = rule.id;
 
-  // Scope creep with medium+ risk escalates recommended → required
+  // Scope creep + elevated risk: soft escalate recommended → required only
+  // when risk is HIGH/CRITICAL (not every medium stack).
   if (
     input.scopeCreepDetected &&
-    (input.riskClassification === "MEDIUM" ||
-      input.riskClassification === "HIGH" ||
+    (input.riskClassification === "HIGH" ||
       input.riskClassification === "CRITICAL") &&
     finalDecision === "REVIEW_RECOMMENDED"
   ) {
@@ -47,14 +47,23 @@ export function computeFinalDecision(
     matchedRuleId = `${matchedRuleId}+scope-creep-escalation`;
   }
 
-  // Genuine third input: HIGH import-graph impact escalates one level
-  // independent of whether risk/scope already saw "sensitive" tags.
+  // HIGH blast radius escalates one level, but never into BLOCKED by itself.
+  // (BLOCKED requires critical-class risk — see enforceBlockSafetyNet.)
   if (impactClassification === "HIGH") {
-    const escalated = escalateOneLevel(finalDecision);
+    const escalated = escalateOneLevelForImpact(finalDecision);
     if (escalated !== finalDecision) {
       matchedRuleId = `${matchedRuleId}+high-impact-escalation`;
       finalDecision = escalated;
     }
+  }
+
+  // Safety net: never emit BLOCKED without critical-class risk signals.
+  // Exaggerated medium findings / impact alone cannot hide a true critical
+  // (CRITICAL risk still blocks), but also cannot invent a block.
+  const blockCheck = enforceBlockSafetyNet(finalDecision, input);
+  if (blockCheck.decision !== finalDecision) {
+    matchedRuleId = `${matchedRuleId}+${blockCheck.reasonCode}`;
+    finalDecision = blockCheck.decision;
   }
 
   const reasons = buildReasons(
@@ -79,18 +88,58 @@ export function computeFinalDecision(
   };
 }
 
-/** One-level severity increase for HIGH blast radius. */
-export function escalateOneLevel(decision: Decision): Decision {
+/**
+ * One-level severity increase for HIGH blast radius.
+ * Caps at REVIEW_REQUIRED — impact alone must not produce BLOCKED.
+ */
+export function escalateOneLevelForImpact(decision: Decision): Decision {
   switch (decision) {
     case "LOW":
       return "REVIEW_RECOMMENDED";
     case "REVIEW_RECOMMENDED":
       return "REVIEW_REQUIRED";
     case "REVIEW_REQUIRED":
-      return "BLOCKED";
+      return "REVIEW_REQUIRED";
     case "BLOCKED":
       return "BLOCKED";
   }
+}
+
+/** @deprecated Use escalateOneLevelForImpact */
+export function escalateOneLevel(decision: Decision): Decision {
+  return escalateOneLevelForImpact(decision);
+}
+
+/**
+ * BLOCKED only when risk is CRITICAL or a critical-severity risk factor exists.
+ * Otherwise demote to REVIEW_REQUIRED so real criticals still surface as block
+ * while noisy medium stacks become review.
+ */
+export function enforceBlockSafetyNet(
+  decision: Decision,
+  input: Pick<
+    DecisionEngineInput,
+    "riskClassification" | "riskFactors"
+  >,
+): { decision: Decision; reasonCode: string } {
+  if (decision !== "BLOCKED") {
+    return { decision, reasonCode: "no-change" };
+  }
+
+  const hasCriticalFactor = input.riskFactors.some(
+    (f) => f.severity.toLowerCase() === "critical",
+  );
+  const criticalClass =
+    input.riskClassification === "CRITICAL" || hasCriticalFactor;
+
+  if (criticalClass) {
+    return { decision: "BLOCKED", reasonCode: "block-confirmed-critical" };
+  }
+
+  return {
+    decision: "REVIEW_REQUIRED",
+    reasonCode: "block-demoted-non-critical",
+  };
 }
 
 function buildReasons(

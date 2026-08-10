@@ -35,6 +35,8 @@ export interface DecisionRule {
  * Adjust this object to tune product behavior without a rules editor UI.
  */
 export const DEFAULT_DECISION_RULES: DecisionRule[] = [
+  // BLOCK is reserved for CRITICAL risk classification (real critical findings
+  // or very high scores). High risk + bad scope → REVIEW_REQUIRED, not BLOCK.
   {
     id: "critical-risk-any-scope",
     description: "Critical risk always blocks",
@@ -45,10 +47,10 @@ export const DEFAULT_DECISION_RULES: DecisionRule[] = [
   },
   {
     id: "high-risk-low-scope",
-    description: "High risk with low scope compliance blocks",
+    description: "High risk with low scope compliance requires human review",
     risk: "HIGH",
     scope: "LOW_COMPLIANCE",
-    decision: "BLOCKED",
+    decision: "REVIEW_REQUIRED",
     priority: 20,
   },
   {
@@ -77,18 +79,18 @@ export const DEFAULT_DECISION_RULES: DecisionRule[] = [
   },
   {
     id: "medium-risk-low-scope",
-    description: "Medium risk + low scope compliance requires review",
+    description: "Medium risk + low scope → review recommended (not required)",
     risk: "MEDIUM",
     scope: "LOW_COMPLIANCE",
-    decision: "REVIEW_REQUIRED",
+    decision: "REVIEW_RECOMMENDED",
     priority: 40,
   },
   {
     id: "low-risk-low-scope",
-    description: "Low risk but significant scope deviation requires review",
+    description: "Low risk but significant scope deviation → review recommended",
     risk: "LOW",
     scope: "LOW_COMPLIANCE",
-    decision: "REVIEW_REQUIRED",
+    decision: "REVIEW_RECOMMENDED",
     priority: 45,
   },
   {
@@ -151,9 +153,9 @@ export const DEFAULT_DECISION_RULES: DecisionRule[] = [
 
 /** Numeric bands used when only a score is available (optional override points). */
 export const DEFAULT_RISK_SCORE_BANDS = {
-  mediumMin: 25,
-  highMin: 50,
-  criticalMin: 75,
+  mediumMin: 28,
+  highMin: 55,
+  criticalMin: 80,
 } as const;
 
 export function matchDecisionRule(

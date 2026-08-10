@@ -6,6 +6,8 @@ export {
   computeFinalDecision,
   finalDecisionLabel,
   escalateOneLevel,
+  escalateOneLevelForImpact,
+  enforceBlockSafetyNet,
 } from "@/lib/analysis/decision-engine/engine";
 export {
   DEFAULT_DECISION_RULES,
