@@ -28,6 +28,16 @@ export {
 } from "@/lib/analysis/decision-engine";
 export { analyzeImpact } from "@/lib/analysis/impact";
 export {
+  buildFeedbackPayload,
+  feedbackMarker,
+  FEEDBACK_MARKER_PREFIX,
+} from "@/lib/analysis/feedback";
+export type {
+  FeedbackBuildInput,
+  FeedbackFindingInput,
+  FeedbackPayload,
+} from "@/lib/analysis/feedback";
+export {
   createDefaultAiProvider,
   isAiProviderConfigured,
   getActiveAiProviderName,

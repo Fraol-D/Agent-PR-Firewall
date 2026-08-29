@@ -161,7 +161,7 @@ Copy from [`.env.example`](.env.example). Never commit `.env.local` or PEM keys.
 | Webhook secret     | Same as `GITHUB_APP_WEBHOOK_SECRET` |
 | Redirect on update | Enabled                             |
 
-3. **Permissions (repo):** Metadata read, Contents read, Pull requests read.
+3. **Permissions (repo):** Metadata read, Contents read, Pull requests **read & write** (write posts Stage 5 feedback comments).
 4. **Events:** Installation, Installation repositories, Pull request.
 5. Install the app on a test repository from the product **Repositories** page.
 

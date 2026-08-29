@@ -129,7 +129,10 @@ export default async function SettingsPage() {
         <CardHeader>
           <CardTitle className="text-base">Minimum App permissions</CardTitle>
           <CardDescription>
-            Stage 1 only needs read access for ingestion.
+            After changing permissions on GitHub, accept the update on the
+            repository installation (GitHub emails the owner, or open the App
+            → Install App → Review request). Pull requests write is required to
+            post analysis feedback comments.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">

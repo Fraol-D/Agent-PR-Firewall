@@ -15,8 +15,10 @@ import {
   ChevronDown,
   Circle,
   Crosshair,
+  ExternalLink,
   FileText,
   Loader2,
+  MessageSquare,
   Play,
   RefreshCw,
   ShieldAlert,
@@ -214,6 +216,12 @@ export function AnalysisPanel({
   const [busy, setBusy] = useState(false);
   const [progressIndex, setProgressIndex] = useState(0);
   const [progressFailed, setProgressFailed] = useState(false);
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [feedbackPosted, setFeedbackPosted] = useState<{
+    commentUrl: string | null;
+    reused: boolean;
+  } | null>(null);
   const userTriggeredRef = useRef(false);
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -263,6 +271,71 @@ export function AnalysisPanel({
     }
     return body.analysis ?? null;
   }, []);
+
+  // Load prior feedback_posted status when a completed analysis is shown
+  useEffect(() => {
+    if (!analysis?.id || analysis.status !== "completed") {
+      setFeedbackPosted(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/analysis/${analysis.id}/feedback`);
+        const body = (await res.json()) as {
+          posted?: boolean;
+          commentUrl?: string | null;
+        };
+        if (cancelled || !res.ok) return;
+        if (body.posted) {
+          setFeedbackPosted({
+            commentUrl: body.commentUrl ?? null,
+            reused: true,
+          });
+        } else {
+          setFeedbackPosted(null);
+        }
+      } catch {
+        /* ignore status load errors */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [analysis?.id, analysis?.status]);
+
+  async function postFeedback(force: boolean) {
+    if (!analysis?.id) return;
+    setFeedbackBusy(true);
+    setFeedbackError(null);
+    try {
+      const res = await fetch(`/api/analysis/${analysis.id}/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force }),
+      });
+      const body = (await res.json()) as {
+        error?: string;
+        feedback?: {
+          commentUrl?: string | null;
+          reused?: boolean;
+        };
+      };
+      if (!res.ok) {
+        throw new Error(body.error ?? "Failed to post feedback");
+      }
+      setFeedbackPosted({
+        commentUrl: body.feedback?.commentUrl ?? null,
+        reused: Boolean(body.feedback?.reused),
+      });
+    } catch (err) {
+      setFeedbackError(
+        err instanceof Error ? err.message : "Failed to post feedback",
+      );
+    } finally {
+      setFeedbackBusy(false);
+    }
+  }
 
   // Poll only while the job is truly pending/running.
   // Cap attempts so a stuck row can never spam the API forever.
@@ -624,6 +697,102 @@ export function AnalysisPanel({
                   ) : null}
                 </div>
               </div>
+            </section>
+
+            {/* Stage 5 — Post deterministic feedback to GitHub PR */}
+            <section
+              aria-label="Agent feedback"
+              className="space-y-3 rounded-3xl border border-border/70 bg-card/70 p-5"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  <h3 className="text-sm font-semibold tracking-tight">
+                    Agent feedback
+                  </h3>
+                  <p className="max-w-2xl text-xs text-muted-foreground">
+                    Post a structured, deterministic comment on the GitHub pull
+                    request (decision, reasons, scope, top findings). No extra
+                    model call. Requires App permission{" "}
+                    <span className="font-medium text-foreground">
+                      Pull requests: Read &amp; write
+                    </span>
+                    .
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {feedbackPosted?.commentUrl ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      render={
+                        <a
+                          href={feedbackPosted.commentUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        />
+                      }
+                    >
+                      <ExternalLink data-icon="inline-start" />
+                      View on GitHub
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant={feedbackPosted ? "outline" : "default"}
+                    size="sm"
+                    disabled={feedbackBusy || busy}
+                    onClick={() => {
+                      void postFeedback(Boolean(feedbackPosted));
+                    }}
+                  >
+                    {feedbackBusy ? (
+                      <Loader2
+                        data-icon="inline-start"
+                        className="animate-spin"
+                      />
+                    ) : (
+                      <MessageSquare data-icon="inline-start" />
+                    )}
+                    {feedbackPosted
+                      ? "Post again"
+                      : "Post feedback to PR"}
+                  </Button>
+                </div>
+              </div>
+              {feedbackPosted ? (
+                <p
+                  role="status"
+                  className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-950 dark:text-emerald-100"
+                >
+                  {feedbackPosted.reused
+                    ? "Feedback was already posted for this analysis (reused)."
+                    : "Feedback comment posted on the pull request."}
+                  {feedbackPosted.commentUrl ? (
+                    <>
+                      {" "}
+                      <a
+                        href={feedbackPosted.commentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-medium underline underline-offset-2"
+                      >
+                        Open comment
+                      </a>
+                    </>
+                  ) : null}
+                </p>
+              ) : null}
+              {feedbackError ? (
+                <div
+                  role="alert"
+                  className="flex gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+                >
+                  <AlertTriangle
+                    className="mt-0.5 size-3.5 shrink-0"
+                    aria-hidden
+                  />
+                  <p>{feedbackError}</p>
+                </div>
+              ) : null}
             </section>
 
             {/* Stage 4 — Decision Explanation (§22.3) */}

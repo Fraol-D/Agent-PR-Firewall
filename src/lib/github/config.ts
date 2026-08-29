@@ -15,7 +15,8 @@ export const GITHUB_OAUTH_SCOPES = ["read:user", "user:email"] as const;
 export const GITHUB_APP_PERMISSIONS = {
   metadata: "read",
   contents: "read",
-  pull_requests: "read",
+  /** Write required to post Stage 5 analysis feedback as a PR comment. */
+  pull_requests: "write",
 } as const;
 
 export const GITHUB_APP_WEBHOOK_EVENTS = [
