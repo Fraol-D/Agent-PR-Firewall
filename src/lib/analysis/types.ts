@@ -248,4 +248,18 @@ export interface AnalysisDetail extends AnalysisRecord {
     confidence: number | null;
     explanation: string | null;
   }>;
+  /** Stage 5 — latest human override (advisory; engine decision unchanged). */
+  humanOverride: {
+    action: "approve" | "keep_blocked";
+    note: string | null;
+    actorUserId: string;
+    createdAt: string;
+    originalDecision: string;
+  } | null;
+  /** Stage 5 — latest GitHub Check Run for this analysis. */
+  checkRun: {
+    id: number;
+    htmlUrl: string | null;
+    conclusion: string;
+  } | null;
 }

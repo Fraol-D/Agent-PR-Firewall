@@ -28,6 +28,10 @@ export {
 } from "@/lib/analysis/decision-engine";
 export { analyzeImpact } from "@/lib/analysis/impact";
 export {
+  CHECK_RUN_NAME,
+  decisionToCheckConclusion,
+} from "@/lib/analysis/checks";
+export {
   buildFeedbackPayload,
   feedbackMarker,
   FEEDBACK_MARKER_PREFIX,

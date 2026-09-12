@@ -222,6 +222,9 @@ export function AnalysisPanel({
     commentUrl: string | null;
     reused: boolean;
   } | null>(null);
+  const [overrideBusy, setOverrideBusy] = useState(false);
+  const [overrideError, setOverrideError] = useState<string | null>(null);
+  const [overrideNote, setOverrideNote] = useState("");
   const userTriggeredRef = useRef(false);
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -334,6 +337,33 @@ export function AnalysisPanel({
       );
     } finally {
       setFeedbackBusy(false);
+    }
+  }
+
+  async function submitOverride(action: "approve" | "keep_blocked") {
+    if (!analysis?.id) return;
+    setOverrideBusy(true);
+    setOverrideError(null);
+    try {
+      const res = await fetch(`/api/analysis/${analysis.id}/override`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          note: overrideNote.trim() || undefined,
+        }),
+      });
+      const body = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        throw new Error(body.error ?? "Failed to record override");
+      }
+      await refreshAnalysis(analysis.id);
+    } catch (err) {
+      setOverrideError(
+        err instanceof Error ? err.message : "Failed to record override",
+      );
+    } finally {
+      setOverrideBusy(false);
     }
   }
 
@@ -525,8 +555,8 @@ export function AnalysisPanel({
             <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
             <p>
               This analysis is outdated. The pull request has new commits since
-              SHA {analysis.headSha?.slice(0, 7)}. Run a new analysis for the
-              latest code.
+              SHA {analysis.headSha?.slice(0, 7)}. Re-analyze this commit, or
+              wait if a webhook re-analysis is already running for the new head.
             </p>
           </div>
         ) : null}
@@ -697,6 +727,125 @@ export function AnalysisPanel({
                   ) : null}
                 </div>
               </div>
+            </section>
+
+            {analysis.humanOverride ? (
+              <p
+                role="status"
+                className="rounded-lg border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+              >
+                Human override:{" "}
+                <span className="font-medium text-foreground">
+                  {analysis.humanOverride.action === "approve"
+                    ? "Approved"
+                    : "Keep blocked"}
+                </span>
+                {analysis.humanOverride.originalDecision
+                  ? ` · engine was ${analysis.humanOverride.originalDecision}`
+                  : ""}
+                {analysis.humanOverride.note
+                  ? ` — ${analysis.humanOverride.note}`
+                  : ""}
+                . Advisory only; GitHub merge state is unchanged.
+              </p>
+            ) : null}
+
+            {analysis.checkRun?.htmlUrl ? (
+              <p className="text-xs text-muted-foreground">
+                Check run ({analysis.checkRun.conclusion || "reported"}):{" "}
+                <a
+                  href={analysis.checkRun.htmlUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-foreground underline underline-offset-2"
+                >
+                  View on GitHub
+                </a>
+                . Report-only unless branch protection requires this check.
+              </p>
+            ) : null}
+
+            {/* Stage 5 — Human-in-the-loop override (audit trail) */}
+            <section
+              aria-label="Human override"
+              className="space-y-3 rounded-3xl border border-border/70 bg-card/70 p-5"
+            >
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold tracking-tight">
+                  Human review
+                </h3>
+                <p className="max-w-2xl text-xs text-muted-foreground">
+                  Record an override for this analysis. This is an audit trail
+                  only — it does not merge, un-merge, or change GitHub branch
+                  protection.
+                </p>
+              </div>
+              <label className="block space-y-1">
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  Optional note
+                </span>
+                <input
+                  type="text"
+                  value={overrideNote}
+                  onChange={(e) => setOverrideNote(e.target.value)}
+                  maxLength={500}
+                  placeholder="Why you approve or keep this blocked"
+                  className="h-9 w-full rounded-xl border border-border/80 bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40"
+                />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  disabled={overrideBusy || busy}
+                  onClick={() => {
+                    void submitOverride("approve");
+                  }}
+                >
+                  {overrideBusy ? (
+                    <Loader2
+                      data-icon="inline-start"
+                      className="animate-spin"
+                    />
+                  ) : (
+                    <ShieldCheck data-icon="inline-start" />
+                  )}
+                  Approve
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={overrideBusy || busy}
+                  onClick={() => {
+                    void submitOverride("keep_blocked");
+                  }}
+                >
+                  <ShieldX data-icon="inline-start" />
+                  Keep blocked
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy || isActive}
+                  onClick={() => {
+                    void startAnalysis(true);
+                  }}
+                >
+                  <RefreshCw data-icon="inline-start" />
+                  Request more analysis
+                </Button>
+              </div>
+              {overrideError ? (
+                <div
+                  role="alert"
+                  className="flex gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+                >
+                  <AlertTriangle
+                    className="mt-0.5 size-3.5 shrink-0"
+                    aria-hidden
+                  />
+                  <p>{overrideError}</p>
+                </div>
+              ) : null}
             </section>
 
             {/* Stage 5 — Post deterministic feedback to GitHub PR */}

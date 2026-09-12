@@ -17,6 +17,8 @@ export const GITHUB_APP_PERMISSIONS = {
   contents: "read",
   /** Write required to post Stage 5 analysis feedback as a PR comment. */
   pull_requests: "write",
+  /** Write required to post Stage 5 report-only Check Runs. */
+  checks: "write",
 } as const;
 
 export const GITHUB_APP_WEBHOOK_EVENTS = [

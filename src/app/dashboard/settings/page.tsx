@@ -131,8 +131,8 @@ export default async function SettingsPage() {
           <CardDescription>
             After changing permissions on GitHub, accept the update on the
             repository installation (GitHub emails the owner, or open the App
-            → Install App → Review request). Pull requests write is required to
-            post analysis feedback comments.
+            → Install App → Review request). Pull requests write posts feedback
+            comments; Checks write posts report-only Check Runs.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">

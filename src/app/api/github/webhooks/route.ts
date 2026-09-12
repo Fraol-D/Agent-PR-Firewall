@@ -1,10 +1,15 @@
+import { after } from "next/server";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { verifyGitHubWebhookSignature } from "@/lib/github/webhooks/verify";
 import { isAdminClientConfigured } from "@/lib/supabase/admin";
+import { isAiProviderConfigured } from "@/lib/analysis/ai";
+import { startPullRequestAnalysis } from "@/services/analyses";
 import { processGitHubWebhook } from "@/services/github-events";
 
 export const runtime = "nodejs";
+/** Allow after() re-analysis to finish on the same invocation. */
+export const maxDuration = 300;
 
 /**
  * GitHub App webhook receiver.
@@ -72,6 +77,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, message: result.message }, { status: 202 });
     }
     return NextResponse.json({ error: result.message }, { status });
+  }
+
+  if (
+    result.status === "ok" &&
+    result.autoAnalyze &&
+    isAiProviderConfigured() &&
+    isAdminClientConfigured()
+  ) {
+    const job = result.autoAnalyze;
+    after(async () => {
+      try {
+        const started = await startPullRequestAnalysis({
+          userId: job.userId,
+          pullRequestId: job.pullRequestId,
+          force: false,
+          source: "webhook_synchronize",
+        });
+        if (!started.ok) {
+          console.warn("synchronize auto-analysis skipped:", started.error);
+        }
+      } catch (err) {
+        console.error("synchronize auto-analysis failed:", err);
+      }
+    });
   }
 
   return NextResponse.json({

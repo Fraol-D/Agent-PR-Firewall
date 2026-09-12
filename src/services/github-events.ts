@@ -25,7 +25,11 @@ export interface WebhookProcessContext {
 }
 
 export type WebhookProcessResult =
-  | { status: "ok"; message: string }
+  | {
+      status: "ok";
+      message: string;
+      autoAnalyze?: { userId: string; pullRequestId: string };
+    }
   | { status: "ignored"; message: string }
   | { status: "error"; message: string; httpStatus?: number };
 
@@ -247,10 +251,63 @@ async function handlePullRequestEvent(
     };
   }
 
+  const autoAnalyze = await maybeQueueSynchronizeAnalysis({
+    action,
+    pullRequestId: prResult.data.id,
+    newHeadSha: payload.pull_request.head.sha,
+    connectedByUserId: repository.connectedByUserId,
+  });
+
   return {
     status: "ok",
-    message: `Pull request #${payload.pull_request.number} ${action}`,
+    message: autoAnalyze
+      ? `Pull request #${payload.pull_request.number} ${action}; re-analysis queued`
+      : `Pull request #${payload.pull_request.number} ${action}`,
+    autoAnalyze,
   };
+}
+
+/**
+ * Re-analyze when a previously analyzed PR gets a new head SHA.
+ * Only if a completed analysis exists (user already opted into analyzing this PR).
+ */
+async function maybeQueueSynchronizeAnalysis(input: {
+  action: string;
+  pullRequestId: string;
+  newHeadSha: string;
+  connectedByUserId: string;
+}): Promise<{ userId: string; pullRequestId: string } | undefined> {
+  if (input.action !== "synchronize" && input.action !== "reopened") {
+    return undefined;
+  }
+  if (!input.newHeadSha || !input.connectedByUserId) {
+    return undefined;
+  }
+
+  try {
+    const admin = createAdminClient();
+    const { data: latest } = await admin
+      .from("analyses")
+      .select("id, head_sha, status")
+      .eq("pull_request_id", input.pullRequestId)
+      .order("analysis_version", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!latest) return undefined;
+    if (latest.status !== "completed") return undefined;
+    if (!latest.head_sha || latest.head_sha === input.newHeadSha) {
+      return undefined;
+    }
+
+    return {
+      userId: input.connectedByUserId,
+      pullRequestId: input.pullRequestId,
+    };
+  } catch (err) {
+    console.error("maybeQueueSynchronizeAnalysis:", err);
+    return undefined;
+  }
 }
 
 async function handleInstallationEvent(

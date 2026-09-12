@@ -58,6 +58,7 @@ export type AnalysisEventType =
   | "analysis_failed"
   | "decision_changed"
   | "feedback_posted"
+  | "check_run_reported"
   | "human_override";
 
 export interface UserProfile {

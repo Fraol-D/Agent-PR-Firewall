@@ -17,6 +17,7 @@ import { structureFindingEvidence } from "@/lib/analysis/evidence";
 import { logAnalysis } from "@/lib/analysis/log";
 import { runPullRequestAnalysis } from "@/lib/analysis/orchestrator";
 import { computeRiskFromFindings } from "@/lib/analysis/risk";
+import { reportAnalysisCheckRun } from "@/services/checks";
 import type {
   AnalysisDetail,
   AnalysisFindingRecord,
@@ -395,7 +396,7 @@ export async function getAnalysisDetail(
       return { ok: true, data: null };
     }
 
-    const [{ data: findings }, { data: files }, { data: areas }] =
+    const [{ data: findings }, { data: files }, { data: areas }, { data: stage5Events }] =
       await Promise.all([
         supabase
           .from("analysis_findings")
@@ -412,6 +413,12 @@ export async function getAnalysisDetail(
           .select("*")
           .eq("analysis_id", analysisId)
           .order("file_path", { ascending: true }),
+        supabase
+          .from("analysis_events")
+          .select("event_type, metadata, created_at")
+          .eq("analysis_id", analysisId)
+          .in("event_type", ["human_override", "check_run_reported"])
+          .order("created_at", { ascending: false }),
       ]);
 
     const severityBreakdown = emptySeverity();
@@ -515,6 +522,73 @@ export async function getAnalysisDetail(
       finalDecisionResult.reasons[0]?.message ??
       decisionResult.primaryReason;
 
+    const statsOverride = (
+      analysisRow.context_stats as {
+        humanOverride?: {
+          action?: string;
+          note?: string | null;
+          actorUserId?: string;
+          createdAt?: string;
+          originalDecision?: string;
+        };
+      } | null
+    )?.humanOverride;
+
+    const overrideEvent = (stage5Events ?? []).find(
+      (e) => e.event_type === "human_override",
+    );
+    const overrideMeta = (overrideEvent?.metadata ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const humanOverride =
+      statsOverride?.action === "approve" ||
+      statsOverride?.action === "keep_blocked"
+        ? {
+            action: statsOverride.action as "approve" | "keep_blocked",
+            note: statsOverride.note ?? null,
+            actorUserId: statsOverride.actorUserId ?? "",
+            createdAt: statsOverride.createdAt ?? overrideEvent?.created_at ?? "",
+            originalDecision: statsOverride.originalDecision ?? "",
+          }
+        : overrideEvent
+          ? {
+              action:
+                overrideMeta.action === "keep_blocked"
+                  ? ("keep_blocked" as const)
+                  : ("approve" as const),
+              note:
+                typeof overrideMeta.note === "string" ? overrideMeta.note : null,
+              actorUserId:
+                typeof overrideMeta.actor_user_id === "string"
+                  ? overrideMeta.actor_user_id
+                  : "",
+              createdAt: overrideEvent.created_at,
+              originalDecision:
+                typeof overrideMeta.original_decision === "string"
+                  ? overrideMeta.original_decision
+                  : "",
+            }
+          : null;
+
+    const checkEvent = (stage5Events ?? []).find(
+      (e) => e.event_type === "check_run_reported",
+    );
+    const checkMeta = (checkEvent?.metadata ?? {}) as Record<string, unknown>;
+    const checkId = Number(checkMeta.check_run_id);
+    const checkRun =
+      Number.isFinite(checkId) && checkId > 0
+        ? {
+            id: checkId,
+            htmlUrl:
+              typeof checkMeta.html_url === "string" ? checkMeta.html_url : null,
+            conclusion:
+              typeof checkMeta.conclusion === "string"
+                ? checkMeta.conclusion
+                : "",
+          }
+        : null;
+
     return {
       ok: true,
       data: {
@@ -546,6 +620,8 @@ export async function getAnalysisDetail(
         intentScope: deterministicResult?.intentScope ?? null,
         finalDecisionResult,
         affectedAreas,
+        humanOverride,
+        checkRun,
       },
     };
   } catch (err) {
@@ -577,6 +653,7 @@ export async function startPullRequestAnalysis(input: {
   userId: string;
   pullRequestId: string;
   force?: boolean;
+  source?: "user" | "webhook_synchronize";
 }): Promise<ServiceResult<{ analysisId: string; reused: boolean }>> {
   try {
     const admin = createAdminClient();
@@ -715,7 +792,11 @@ export async function startPullRequestAnalysis(input: {
       pull_request_id: input.pullRequestId,
       event_type: "analysis_started",
       message: `Analysis v${nextVersion} queued for ${pr.head_sha.slice(0, 7)}`,
-      metadata: { head_sha: pr.head_sha, version: nextVersion },
+      metadata: {
+        head_sha: pr.head_sha,
+        version: nextVersion,
+        source: input.source ?? "user",
+      },
     });
 
     logAnalysis("analysis_started", {
@@ -984,6 +1065,26 @@ async function executeAnalysisJob(job: {
       filesChanged: result.deterministic.filesChanged,
       ok: true,
     });
+
+    // Stage 5 — advisory Check Run (never fail the analysis)
+    try {
+      const check = await reportAnalysisCheckRun({
+        analysisId: job.analysisId,
+        pullRequestId: job.pullRequestId,
+        owner: job.owner,
+        repo: job.name,
+        installationId: job.installationId,
+        headSha: job.headSha,
+        decision: result.finalDecision.finalDecision,
+        summary: result.ai.summary,
+        reasons: result.finalDecision.reasons,
+      });
+      if (!check.ok) {
+        console.warn("Check run not reported:", check.error);
+      }
+    } catch (checkErr) {
+      console.warn("Check run reporting failed:", checkErr);
+    }
 
     logAnalysis("analysis_completed", {
       analysisId: job.analysisId,
