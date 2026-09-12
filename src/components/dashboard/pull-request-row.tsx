@@ -32,7 +32,7 @@ export function PullRequestRow({ pr }: { pr: PullRequestListItem }) {
         </div>
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <Link href={`/dashboard/pull-requests/${pr.id}`} className="truncate text-sm font-semibold tracking-tight hover:text-brand">
+            <Link href={`/dashboard/pull-requests/${pr.id}`} className="truncate text-sm font-semibold tracking-tight hover:underline">
               {pr.title}
             </Link>
             <PrStatusBadge status={pr.status} />

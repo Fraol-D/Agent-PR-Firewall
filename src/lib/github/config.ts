@@ -52,16 +52,6 @@ export function getGitHubAppPrivateKey(): string | null {
   const raw = fromPath ?? fromEnv;
 
   if (!raw?.trim()) {
-    logPrivateKeyDiagnostics({
-      detected: false,
-      source: "none",
-      rawLength: 0,
-      normalizedLength: 0,
-      hadEscapedNewlines: false,
-      convertedEscapedNewlines: false,
-      hadRealNewlines: false,
-      pemValid: false,
-    });
     return null;
   }
 
@@ -73,20 +63,15 @@ export function getGitHubAppPrivateKey(): string | null {
     hadEscapedNewlines && normalized.includes("\n");
   const pemValid = isValidPrivateKeyPem(normalized);
 
-  logPrivateKeyDiagnostics({
-    detected: true,
-    source,
-    rawLength: raw.length,
-    normalizedLength: normalized.length,
-    hadEscapedNewlines,
-    convertedEscapedNewlines,
-    hadRealNewlines,
-    pemValid,
-  });
-
   if (!pemValid) {
     console.error(
-      "[github-app] GITHUB_APP_PRIVATE_KEY is set but failed PEM validation after normalization.",
+      "[github-app] Private key failed PEM validation after normalization.",
+      {
+        source,
+        hadEscapedNewlines,
+        convertedEscapedNewlines,
+        hadRealNewlines,
+      },
     );
     return null;
   }
@@ -179,29 +164,6 @@ function readPrivateKeyFromPath(): string | null {
     );
     return null;
   }
-}
-
-function logPrivateKeyDiagnostics(info: {
-  detected: boolean;
-  source: "path" | "env" | "none";
-  rawLength: number;
-  normalizedLength: number;
-  hadEscapedNewlines: boolean;
-  convertedEscapedNewlines: boolean;
-  hadRealNewlines: boolean;
-  pemValid: boolean;
-}): void {
-  // Temporary server-side diagnostics — never log key contents.
-  console.info("[github-app] private-key diagnostics", {
-    detected: info.detected,
-    source: info.source,
-    keyLengthRaw: info.rawLength,
-    keyLengthNormalized: info.normalizedLength,
-    hadEscapedNewlines: info.hadEscapedNewlines,
-    convertedEscapedNewlines: info.convertedEscapedNewlines,
-    hadRealNewlines: info.hadRealNewlines,
-    pemValidationPassed: info.pemValid,
-  });
 }
 
 export function getGitHubWebhookSecret(): string | null {

@@ -231,7 +231,7 @@ export async function postAnalysisFeedback(input: {
       headSha: detail.headSha,
       analysisVersion: detail.analysisVersion,
       dashboardUrl,
-      productName: "Agent PR Firewall",
+      productName: "Veris",
     });
 
     const octokit = createInstallationOctokit(repo.github_installation_id);

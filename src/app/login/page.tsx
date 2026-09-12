@@ -38,7 +38,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   return (
     <div className="relative flex min-h-full flex-col">
       <div className="pointer-events-none absolute inset-0 grid-bg opacity-30" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(ellipse_at_top,color-mix(in_oklch,var(--brand)_16%,transparent),transparent_70%)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(ellipse_at_top,color-mix(in_oklch,var(--foreground)_8%,transparent),transparent_70%)] dark:opacity-40" />
 
       <div className="relative mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-4 py-16">
         <div className="mb-8 flex justify-center">

@@ -1,14 +1,16 @@
-# Agent PR Firewall
+# Veris
 
-**Scope, impact, and intent analysis for pull requests—especially those written by coding agents.**
+**Evidence-based pull request verification for autonomous coding agents.**
 
-Agent PR Firewall is a GitHub-native developer tool that answers a different question than a generic AI code reviewer:
+> Code name / repo: **Agent PR Firewall** (`agent-pr-firewall`)
+
+Veris is a GitHub-native trust layer that answers a different question than a generic AI code reviewer:
 
 > Did the agent (or author) do what was asked, and what else might this change affect?
 
-It sits between autonomous coding agents and human merge trust: deterministic change facts first, then bounded AI judgment, then an explainable merge recommendation.
+It sits between autonomous coding agents and human merge trust: deterministic change facts first, then bounded AI judgment, then an explainable advisory decision — plus PR comments, Check Runs, and human overrides.
 
-**Product version:** v0.3.0 (Stage 3 — Scope & Consistency Analysis)
+**Product version:** v0.5.0 (Stages 0–5 complete; Stage 6 polish)
 **License:** Private / portfolio (see [License](#license))
 
 ---

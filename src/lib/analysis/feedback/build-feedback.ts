@@ -143,7 +143,7 @@ function bulletList(lines: string[], empty: string): string {
  * Pure function — no I/O, no LLM.
  */
 export function buildFeedbackPayload(input: FeedbackBuildInput): FeedbackPayload {
-  const product = input.productName ?? "Agent PR Firewall";
+  const product = input.productName ?? "Veris";
   const decision = input.finalDecision;
   const decisionLabel = finalDecisionLabel(decision);
   const marker = feedbackMarker(input.analysisId);

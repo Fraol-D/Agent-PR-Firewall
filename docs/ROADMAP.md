@@ -1,6 +1,6 @@
-# Agent PR Firewall — Development Roadmap
+# Veris — Development Roadmap
 
-**Product version target:** v0.3.0 = Stage 3 complete
+**Product version:** v0.5.0 = Stages 0–5 complete (code name: Agent PR Firewall)
 
 ---
 
@@ -18,85 +18,43 @@
 
 ## Completed
 
-### Stage 0 — Foundation
+### Stages 0–3
 
-Next.js app, design system, Supabase auth/schema, dashboard shell.
-
-**Status:** Complete.
-
-### Stage 1 — GitHub integration
-
-GitHub App install/setup/sync, webhooks, PR persistence, list/detail, Import PRs.
+Foundation, GitHub App integration, analysis pipeline, hardening, trust UX, intent & scope.
 
 **Status:** Complete.
 
-### Stage 2 — PR analysis pipeline
+### Stage 4 — Decision engine + import-graph impact
 
-Manual analyze, SHA-aware lifecycle, OpenRouter free model, findings UI, version history.
+Explainable `final_decision`, risk × scope rules, HIGH-impact escalation, migration `005`.
 
-**Status:** Complete.
-
-### Stage 2.5 — Hardening
-
-SHA-pinned compare, confidence calibration, `affectedFiles` filter, `duration_ms`, structured logs, atomic completion RPC.
-
-**Status:** Complete. Migration: `004_stage2_5_hardening.sql`.
-
-### Stage 2.6 — UX & trust
-
-Merge decision UI, decision trace, structured evidence, progress steps, notifications, risk breakdown, docs-aware prompts.
-
-**Status:** Complete. See `STAGE_2_6_REPORT.md`.
-
-### Stage 3 — Scope & Consistency Analysis
-
-Task extraction, PR classification, scope match/creep/coverage/missing work, Scope & Consistency Analysis panel, Decision Engine integration.
-
-**Status:** Complete (v0.3.0). See `STAGE_3_REPORT.md`, `HANDOFF_STAGE3.md`.
-
-**Code:** `src/lib/analysis/scope/`
-
----
-
-## Upcoming
-
-### Stage 4 — Decision engine productization
-
-**Why:** Turn deterministic recommendations into a first-class, configurable policy product.
-
-**Directions:**
-
-- Persist `final_decision` with versioned rule ids
-- Policy thresholds (what becomes BLOCK vs REVIEW)
-- Stronger impact/risk modules (beyond stubs)
-- Optional GitHub Check / commit status (read-only first)
-- Audit trail for decision overrides
-
-**See:** [`DECISION_ENGINE.md`](./DECISION_ENGINE.md) (current rules) and Stage 4 notes in [`HANDOFF_STAGE3.md`](./HANDOFF_STAGE3.md).
+**Status:** Complete (v0.4.0). See `HANDOFF_STAGE4.md`.
 
 ### Stage 5 — Agent feedback loop
 
-PR comments or checks for agents; re-analyze on new commits; structured “fix these items” output.
+Deterministic PR comments, report-only Check Runs, re-analyze on `synchronize`, human override audit trail.
 
-### Stage 6 — Portfolio & product polish
-
-Demo narrative, sample analyses, public screenshots, optional deploy story.
+**Status:** Complete (v0.5.0).
 
 ---
 
-## Future ideas (unscheduled)
+## In progress / next
 
-- Local / self-hosted LLM path
-- Import-graph blast radius
+### Stage 6 — Portfolio & product polish
+
+Veris branding, monochrome dark UI, demo script, settings/docs alignment.
+
+### Stage 7+ (unscheduled)
+
+- Background job queue for analysis
+- Per-repo policy overrides
+- Deeper import-graph (tsconfig paths, packages)
 - Org multi-seat workspaces
-- Policy UI
-- Optional paid models (never required for baseline)
 
 ---
 
 ## Suggested next work
 
-1. Read [`HANDOFF_STAGE3.md`](./HANDOFF_STAGE3.md).
-2. Confirm migrations `001`–`004` on the target Supabase project.
-3. Commit remaining Stage 3 + docs polish to `main` if not already.
-4. Design Stage 4 policy + persistence (no silent GitHub blocks yet).
+1. Record a demo: Analyze → decision → Check Run → PR comment → override.
+2. Confirm Vercel env + GitHub App Checks write on production.
+3. Optional: background analysis queue when inline timeouts hurt.

@@ -29,8 +29,8 @@ export function ConnectRepoCard() {
           <div className="space-y-1">
             <CardTitle className="text-base">Connect a repository</CardTitle>
             <CardDescription className="text-sm leading-relaxed">
-              Install the Agent PR Firewall GitHub App and select repositories
-              to monitor. OAuth signs you in; the App grants repository access.
+              Install the Veris GitHub App and select repositories to monitor.
+              OAuth signs you in; the App grants repository access.
             </CardDescription>
           </div>
         </div>

@@ -1,9 +1,11 @@
 export const siteConfig = {
-  name: "Agent PR Firewall",
-  shortName: "APF",
+  name: "Veris",
+  shortName: "Veris",
+  /** Repo/code name — keep until an explicit package rename. */
+  codeName: "Agent PR Firewall",
   description:
-    "Scope, impact, and risk analysis for autonomous coding-agent pull requests.",
-  tagline: "AI agents can write code. But who checks what they changed?",
+    "Evidence-based pull request verification for autonomous coding agents.",
+  tagline: "AI agents can write code. Veris checks what they actually changed.",
   url: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
   links: {
     github: "https://github.com/Fraol-D/Agent-PR-Firewall",

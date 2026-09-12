@@ -7,7 +7,7 @@
 import { finalDecisionLabel } from "@/lib/analysis/decision-engine";
 import type { Decision } from "@/types/domain";
 
-export const CHECK_RUN_NAME = "Agent PR Firewall";
+export const CHECK_RUN_NAME = "Veris";
 
 export type CheckConclusion =
   | "success"

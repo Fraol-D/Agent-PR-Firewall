@@ -19,7 +19,7 @@ const steps = [
   },
   {
     title: "Pull request",
-    description: "GitHub events stream the change into Agent PR Firewall.",
+    description: "GitHub events stream the change into Veris.",
     icon: GitPullRequest,
   },
   {
@@ -39,7 +39,7 @@ export function ProblemFlow() {
     <section id="how-it-works" className="border-b border-border/70 py-16 sm:py-20">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             Core workflow
           </p>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -60,7 +60,7 @@ export function ProblemFlow() {
                 className="relative rounded-2xl border border-border/80 bg-card/70 p-4"
               >
                 <div className="mb-3 flex items-center justify-between">
-                  <div className="flex size-9 items-center justify-center rounded-lg bg-brand-muted text-brand">
+                  <div className="flex size-9 items-center justify-center rounded-lg border border-border bg-muted text-foreground">
                     <Icon className="size-4" />
                   </div>
                   <span className="font-mono text-[11px] text-muted-foreground">

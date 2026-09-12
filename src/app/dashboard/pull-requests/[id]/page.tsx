@@ -222,7 +222,7 @@ export default async function PullRequestDetailPage({
             pr.events.map((event) => (
               <div key={event.id} className="rounded-2xl border border-border/70 bg-card/70 px-3 py-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-mono text-xs font-medium text-brand">
+                  <span className="font-mono text-xs font-medium text-foreground">
                     {event.eventType}
                   </span>
                   <span className="text-[11px] text-muted-foreground">

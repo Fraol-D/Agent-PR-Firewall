@@ -8,24 +8,24 @@ export function LandingHero() {
   return (
     <section className="relative overflow-hidden border-b border-border/70">
       <div className="pointer-events-none absolute inset-0 grid-bg opacity-40" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(ellipse_at_top,color-mix(in_oklch,var(--brand)_18%,transparent),transparent_65%)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(ellipse_at_top,color-mix(in_oklch,var(--foreground)_8%,transparent),transparent_70%)] dark:opacity-40" />
 
       <div className="relative mx-auto flex max-w-6xl flex-col gap-10 px-4 py-20 sm:px-6 sm:py-28 lg:flex-row lg:items-center lg:gap-16">
         <div className="flex-1 space-y-6">
           <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-card/70 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-            <Shield className="size-3.5 text-brand" />
-            Scope · Impact · Risk for coding-agent PRs
+            <Shield className="size-3.5" />
+            Evidence-based verification for coding-agent PRs
           </div>
           <h1 className="max-w-2xl text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-[3.25rem] lg:leading-[1.1]">
             AI agents can write code.
-            <span className="block text-brand">
-              But who checks what they changed?
+            <span className="block text-muted-foreground">
+              Veris checks what they actually changed.
             </span>
           </h1>
           <p className="max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-            {siteConfig.description} Agent PR Firewall answers:{" "}
+            {siteConfig.description} The question is always:{" "}
             <span className="text-foreground">
-              Did the agent do what it was asked to do, and what else might this
+              Did the agent do what it was asked, and what else might this
               change affect?
             </span>
           </p>
@@ -55,7 +55,7 @@ export function LandingHero() {
                   pr #142 · Add dark mode to dashboard
                 </p>
               </div>
-              <span className="rounded-md bg-risk-required/20 px-2 py-1 font-mono text-[11px] font-semibold text-risk-required-foreground">
+              <span className="rounded-md border border-border px-2 py-1 font-mono text-[11px] font-semibold text-risk-required">
                 REVIEW_REQUIRED
               </span>
             </div>

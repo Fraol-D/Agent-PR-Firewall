@@ -127,7 +127,7 @@ export default async function RepositoriesPage({
               <CardTitle className="text-base">Connection checklist</CardTitle>
               <CardDescription>
                 Complete these steps so GitHub can install the App and send PR
-                webhooks to Agent PR Firewall.
+                webhooks to Veris.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">

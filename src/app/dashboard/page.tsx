@@ -106,8 +106,8 @@ export default async function DashboardPage() {
                 : ""}
             </h2>
             <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-              Monitor agent pull requests with a clean, trust-first view of
-              scope, impact, and decision quality.
+              Monitor agent pull requests with a trust-first view of scope,
+              impact, and explainable decisions.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -260,17 +260,17 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <PriorityItem
-              title="Stage 1 · Ingestion"
-              body="GitHub App install, repository connection, signed webhooks, PR persistence."
+              title="Stages 0–5 · Live"
+              body="Ingest, analyze, explainable decision, PR comments, Check Runs, re-analyze, human override."
               active
             />
             <PriorityItem
-              title="Stage 2 · Deterministic analysis"
-              body="Changed files, sensitive areas, size signals, initial risk factors."
+              title="Stage 6 · Polish"
+              body="Veris branding, monochrome dark UI, demo narrative."
             />
             <PriorityItem
-              title="Stage 3–4 · Scope + decisions"
-              body="Task-scope compliance and explainable final decisions."
+              title="Later · Reliability"
+              body="Background analysis queue and optional per-repo policy. No silent auto-merge."
             />
           </CardContent>
         </Card>

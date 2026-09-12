@@ -70,9 +70,9 @@ export function DashboardSidebar({ className }: { className?: string }) {
       </nav>
       <div className="border-t border-sidebar-border p-3">
         <div className="rounded-2xl border border-border/70 bg-card/70 p-3">
-          <p className="text-xs font-medium text-foreground">Agent PR Firewall</p>
+          <p className="text-xs font-medium text-foreground">Veris</p>
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            Monitor scope, consistency, and risk across autonomous PRs.
+            Evidence-based verification for agent pull requests.
           </p>
         </div>
       </div>

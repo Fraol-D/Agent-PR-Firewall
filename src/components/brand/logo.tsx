@@ -22,7 +22,7 @@ export function Logo({
       <div className={cn("relative shrink-0", logoBoxSize)}>
         <Image
           src="/assets/logo.png"
-          alt="Agent PR Firewall"
+          alt="Veris"
           fill
           priority={size === "sm"}
           className="object-contain"
@@ -32,10 +32,10 @@ export function Logo({
       {showWordmark ? (
         <div className="flex flex-col leading-none">
           <span className={cn("font-semibold tracking-tight", textSize)}>
-            Agent PR Firewall
+            Veris
           </span>
           <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            Scope · Impact · Risk
+            Evidence · Scope · Risk
           </span>
         </div>
       ) : null}

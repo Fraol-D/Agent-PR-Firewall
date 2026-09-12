@@ -85,15 +85,15 @@ const severityOrder: FindingSeverity[] = [
 
 const severityStyles: Record<FindingSeverity, string> = {
   critical:
-    "border-transparent bg-red-600/15 text-red-900 dark:bg-red-500/20 dark:text-red-100",
+    "border-transparent bg-red-600/15 text-red-900 dark:bg-transparent dark:text-risk-blocked",
   high:
-    "border-transparent bg-orange-600/15 text-orange-950 dark:bg-orange-500/20 dark:text-orange-100",
+    "border-transparent bg-orange-600/15 text-orange-950 dark:bg-transparent dark:text-risk-required",
   medium:
-    "border-transparent bg-amber-600/15 text-amber-950 dark:bg-amber-500/20 dark:text-amber-100",
+    "border-transparent bg-amber-600/15 text-amber-950 dark:bg-transparent dark:text-risk-review",
   low:
-    "border-transparent bg-emerald-600/15 text-emerald-950 dark:bg-emerald-500/20 dark:text-emerald-100",
+    "border-transparent bg-emerald-600/15 text-emerald-950 dark:bg-transparent dark:text-risk-low",
   info:
-    "border-transparent bg-sky-500/15 text-sky-900 dark:bg-sky-500/20 dark:text-sky-100",
+    "border-transparent bg-muted text-muted-foreground dark:bg-transparent dark:text-muted-foreground",
 };
 
 const PROGRESS_STEPS = [
@@ -147,9 +147,9 @@ function finalDecisionVisual(decision: Decision): {
       return {
         icon: ShieldCheck,
         shell:
-          "border-emerald-600/30 bg-emerald-50 text-emerald-950 dark:border-emerald-400/35 dark:bg-emerald-500/15 dark:text-emerald-50",
+          "border-emerald-600/30 bg-emerald-50 text-emerald-950 dark:border-border dark:border-l-risk-low dark:bg-card dark:text-foreground",
         badge:
-          "border-transparent bg-emerald-600/15 text-emerald-900 dark:bg-emerald-400/20 dark:text-emerald-50",
+          "border-transparent bg-emerald-600/15 text-emerald-900 dark:bg-transparent dark:text-risk-low",
         label: finalDecisionLabel(decision),
         code: decision,
       };
@@ -157,9 +157,9 @@ function finalDecisionVisual(decision: Decision): {
       return {
         icon: ShieldAlert,
         shell:
-          "border-amber-600/30 bg-amber-50 text-amber-950 dark:border-amber-400/35 dark:bg-amber-500/15 dark:text-amber-50",
+          "border-amber-600/30 bg-amber-50 text-amber-950 dark:border-border dark:border-l-risk-review dark:bg-card dark:text-foreground",
         badge:
-          "border-transparent bg-amber-600/15 text-amber-950 dark:bg-amber-400/20 dark:text-amber-50",
+          "border-transparent bg-amber-600/15 text-amber-950 dark:bg-transparent dark:text-risk-review",
         label: finalDecisionLabel(decision),
         code: decision,
       };
@@ -167,9 +167,9 @@ function finalDecisionVisual(decision: Decision): {
       return {
         icon: ShieldAlert,
         shell:
-          "border-orange-600/35 bg-orange-50 text-orange-950 dark:border-orange-400/40 dark:bg-orange-500/15 dark:text-orange-50",
+          "border-orange-600/35 bg-orange-50 text-orange-950 dark:border-border dark:border-l-risk-required dark:bg-card dark:text-foreground",
         badge:
-          "border-transparent bg-orange-600/15 text-orange-950 dark:bg-orange-400/20 dark:text-orange-50",
+          "border-transparent bg-orange-600/15 text-orange-950 dark:bg-transparent dark:text-risk-required",
         label: finalDecisionLabel(decision),
         code: decision,
       };
@@ -177,9 +177,9 @@ function finalDecisionVisual(decision: Decision): {
       return {
         icon: ShieldX,
         shell:
-          "border-red-600/35 bg-red-50 text-red-950 dark:border-red-400/40 dark:bg-red-500/15 dark:text-red-50",
+          "border-red-600/35 bg-red-50 text-red-950 dark:border-border dark:border-l-risk-blocked dark:bg-card dark:text-foreground",
         badge:
-          "border-transparent bg-red-600/15 text-red-950 dark:bg-red-400/25 dark:text-red-50",
+          "border-transparent bg-red-600/15 text-red-950 dark:bg-transparent dark:text-risk-blocked",
         label: finalDecisionLabel(decision),
         code: decision,
       };
@@ -550,7 +550,7 @@ export function AnalysisPanel({
         {analysis?.isOutdated ? (
           <div
             role="status"
-            className="flex gap-2 rounded-lg border border-risk-review/40 bg-risk-review/10 px-3 py-2 text-sm text-risk-review-foreground"
+            className="flex gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-foreground"
           >
             <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
             <p>
@@ -672,7 +672,7 @@ export function AnalysisPanel({
             <section
               aria-label="Final decision"
               className={cn(
-                "rounded-3xl border p-5 transition-colors",
+                "rounded-3xl border p-5 transition-colors dark:border-l-4",
                 decisionMeta.shell,
               )}
             >
@@ -910,7 +910,7 @@ export function AnalysisPanel({
               {feedbackPosted ? (
                 <p
                   role="status"
-                  className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-950 dark:text-emerald-100"
+                  className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-foreground"
                 >
                   {feedbackPosted.reused
                     ? "Feedback was already posted for this analysis (reused)."
@@ -972,14 +972,15 @@ export function AnalysisPanel({
                       <span
                         className={cn(
                           "mt-0.5 shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide",
+                          "bg-muted text-muted-foreground",
                           reason.source === "risk_factor" &&
-                            "bg-red-500/10 text-red-800 dark:text-red-200",
+                            "bg-red-500/10 text-red-800 dark:bg-muted dark:text-risk-blocked",
                           reason.source === "scope" &&
-                            "bg-amber-500/10 text-amber-900 dark:text-amber-100",
+                            "bg-amber-500/10 text-amber-900 dark:bg-muted dark:text-risk-review",
                           reason.source === "affected_area" &&
-                            "bg-sky-500/10 text-sky-900 dark:text-sky-100",
+                            "bg-muted text-muted-foreground",
                           reason.source === "impact" &&
-                            "bg-orange-500/10 text-orange-900 dark:text-orange-100",
+                            "bg-orange-500/10 text-orange-900 dark:bg-muted dark:text-risk-required",
                           reason.source === "policy" &&
                             "bg-muted text-muted-foreground",
                         )}
