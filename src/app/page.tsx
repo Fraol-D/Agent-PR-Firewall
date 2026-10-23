@@ -27,8 +27,9 @@ export default async function HomePage() {
                 Start with GitHub. Scale with confidence.
               </h2>
               <p className="text-sm leading-relaxed text-muted-foreground">
-                Sign in, open the dashboard shell, and begin connecting
-                repositories. Analysis engines activate in later stages.
+                Sign in with GitHub, connect a repository, and analyze a pull
+                request. Veris produces an explainable decision from evidence,
+                not style nits.
               </p>
             </div>
             <Button size="lg" render={<Link href={user ? "/dashboard" : "/login"} />}>
@@ -40,10 +41,10 @@ export default async function HomePage() {
       <footer className="border-t border-border/70 py-8">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <p>
-            {siteConfig.name} — modular monolith foundation for agent PR
-            analysis.
+            {siteConfig.name} — evidence-based verification for agent pull
+            requests.
           </p>
-          <p className="font-mono">Stage 0 · Foundation</p>
+          <p className="font-mono">v0.5 · Stages 0–5</p>
         </div>
       </footer>
     </div>

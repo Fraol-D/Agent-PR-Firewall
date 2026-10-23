@@ -2,7 +2,11 @@ import { type NextRequest } from "next/server";
 
 import { updateSession } from "@/lib/supabase/middleware";
 
-export async function middleware(request: NextRequest) {
+/**
+ * Next.js 16 renamed middleware → proxy.
+ * Session refresh + dashboard auth gate. Does not rewrite nested routes.
+ */
+export async function proxy(request: NextRequest) {
   return updateSession(request);
 }
 
