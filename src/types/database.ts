@@ -317,6 +317,7 @@ export interface Database {
           impact_classification: string | null;
           final_decision: string | null;
           summary: string | null;
+          evaluation_notes: string | null;
           started_at: string | null;
           completed_at: string | null;
           created_at: string;
@@ -344,6 +345,7 @@ export interface Database {
           impact_classification?: string | null;
           final_decision?: string | null;
           summary?: string | null;
+          evaluation_notes?: string | null;
           started_at?: string | null;
           completed_at?: string | null;
           created_at?: string;
@@ -371,6 +373,7 @@ export interface Database {
           impact_classification?: string | null;
           final_decision?: string | null;
           summary?: string | null;
+          evaluation_notes?: string | null;
           started_at?: string | null;
           completed_at?: string | null;
           created_at?: string;
