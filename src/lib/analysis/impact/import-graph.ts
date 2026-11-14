@@ -3,13 +3,64 @@
  */
 
 import {
-  extractImportSpecifiers,
-  isResolvableSpecifier,
-  isSourceCodePath,
+  classifyModuleArea,
+  isRouteLikePath,
   normalizePath,
-  resolveImportBase,
-  resolveToExistingFile,
 } from "@/lib/analysis/impact/parse-imports";
+import {
+  IMPACT_GRAPH_DEFAULT_MAX_EDGES,
+  IMPACT_GRAPH_MAX_DEPTH,
+  IMPACT_GRAPH_VERSION,
+  IMPACT_PATH_DEFAULTS,
+  buildImpactGraphData,
+  buildImpactImportIndex,
+  reconstructNodePaths,
+  stronglyConnectedComponents,
+  type BuildImpactGraphInput,
+  type ImpactCycleGroup,
+  type ImpactDepth,
+  type ImpactEdgeResolutionKind,
+  type ImpactEdgeRole,
+  type ImpactGraphData,
+  type ImpactGraphEdge,
+  type ImpactGraphMetadata,
+  type ImpactGraphNode,
+  type ImpactImportIndex,
+  type ImpactNodeAnalysisStatus,
+  type ImpactNodeCategory,
+  type ImpactPathReconstructionOptions,
+  type ImpactPathReconstructionResult,
+  type ImpactPathRecord,
+} from "@/lib/analysis/impact/impact-graph";
+import type { ChangedFileEvidence } from "@/lib/analysis/types";
+
+export {
+  classifyModuleArea,
+  isRouteLikePath,
+  IMPACT_GRAPH_DEFAULT_MAX_EDGES,
+  IMPACT_GRAPH_MAX_DEPTH,
+  IMPACT_GRAPH_VERSION,
+  IMPACT_PATH_DEFAULTS,
+  buildImpactGraphData,
+  buildImpactImportIndex,
+  reconstructNodePaths,
+  stronglyConnectedComponents,
+  type BuildImpactGraphInput,
+  type ImpactCycleGroup,
+  type ImpactDepth,
+  type ImpactEdgeResolutionKind,
+  type ImpactEdgeRole,
+  type ImpactGraphData,
+  type ImpactGraphEdge,
+  type ImpactGraphMetadata,
+  type ImpactGraphNode,
+  type ImpactImportIndex,
+  type ImpactNodeAnalysisStatus,
+  type ImpactNodeCategory,
+  type ImpactPathReconstructionOptions,
+  type ImpactPathReconstructionResult,
+  type ImpactPathRecord,
+};
 
 export type ReverseImportGraph = Map<string, Set<string>>;
 
@@ -28,47 +79,25 @@ export interface ImportGraphBuildResult {
 
 /**
  * Build reverse dependency graph from path → source text map.
+ * Shares `buildImpactImportIndex` so callers can either pass `files` directly
+ * or reuse an already-constructed `importIndex`.
  */
 export function buildReverseImportGraph(
   files: Map<string, string>,
+  options?: {
+    changedFiles?: ChangedFileEvidence[];
+    importIndex?: ImpactImportIndex;
+  },
 ): ImportGraphBuildResult {
-  const pathSet = new Set(
-    [...files.keys()].map((p) => normalizePath(p)).filter(isSourceCodePath),
-  );
-  const reverseGraph: ReverseImportGraph = new Map();
-
-  let parsedCount = 0;
-  let failedCount = 0;
-
-  for (const [rawPath, source] of files) {
-    const importer = normalizePath(rawPath);
-    if (!isSourceCodePath(importer)) continue;
-    try {
-      const specs = extractImportSpecifiers(source);
-      parsedCount += 1;
-      for (const spec of specs) {
-        if (!isResolvableSpecifier(spec)) continue;
-        const base = resolveImportBase(importer, spec);
-        if (!base) continue;
-        const target = resolveToExistingFile(base, pathSet);
-        if (!target || target === importer) continue;
-        let set = reverseGraph.get(target);
-        if (!set) {
-          set = new Set();
-          reverseGraph.set(target, set);
-        }
-        set.add(importer);
-      }
-    } catch {
-      failedCount += 1;
-    }
-  }
+  const index =
+    options?.importIndex ??
+    buildImpactImportIndex(files, options?.changedFiles ?? []);
 
   return {
-    reverseGraph,
-    scannedPaths: [...pathSet],
-    parsedCount,
-    failedCount,
+    reverseGraph: index.reverse,
+    scannedPaths: [...index.scannedSourcePaths],
+    parsedCount: index.unresolvedByImporter.size,
+    failedCount: index.parseFailed.size,
     truncated: false,
   };
 }
@@ -134,31 +163,4 @@ function findGraphKeys(graph: ReverseImportGraph, path: string): string[] {
   }
   // Also if path not a graph key (never imported as target), return [n]
   return keys.length > 0 ? keys : [n];
-}
-
-/** Next.js App Router / Pages convention helpers. */
-export function isRouteLikePath(path: string): boolean {
-  const p = normalizePath(path);
-  return (
-    /(^|\/)app\/.*\/(page|layout|route|loading|error|template)\.(tsx?|jsx?)$/i.test(
-      p,
-    ) ||
-    /(^|\/)pages\/.+\.(tsx?|jsx?)$/i.test(p) ||
-    /(^|\/)app\/(page|layout|route)\.(tsx?|jsx?)$/i.test(p)
-  );
-}
-
-export function classifyModuleArea(path: string): string {
-  const p = normalizePath(path).toLowerCase();
-  if (/(^|\/)(auth|session|oauth|middleware)/.test(p)) return "Authentication";
-  if (/(^|\/)(migrations?|prisma|drizzle|supabase|database|sql)/.test(p)) {
-    return "Database";
-  }
-  if (isRouteLikePath(p)) return "Route";
-  if (/(^|\/)app\//.test(p) || /(^|\/)pages\//.test(p)) return "App UI";
-  if (/(^|\/)components?\//.test(p)) return "UI Components";
-  if (/(^|\/)(api|services?|server)\//.test(p)) return "Backend";
-  if (/(^|\/)lib\//.test(p)) return "Library";
-  if (/(^|\/)hooks?\//.test(p)) return "Hooks";
-  return "Module";
 }

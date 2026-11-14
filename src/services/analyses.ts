@@ -14,10 +14,13 @@ import {
   type DecisionEngineResult,
 } from "@/lib/analysis/decision-engine";
 import { structureFindingEvidence } from "@/lib/analysis/evidence";
+import { parsePersistedImpactGraph } from "@/lib/analysis/impact/validate-persisted-graph";
 import { logAnalysis } from "@/lib/analysis/log";
 import { runPullRequestAnalysis } from "@/lib/analysis/orchestrator";
+import { buildPersistedContextStats } from "@/lib/analysis/persisted-context-stats";
 import { computeRiskFromFindings } from "@/lib/analysis/risk";
 import { reportAnalysisCheckRun } from "@/services/checks";
+import type { ImpactGraphData } from "@/lib/analysis/impact/impact-graph";
 import type {
   AnalysisDetail,
   AnalysisFindingRecord,
@@ -522,8 +525,24 @@ export async function getAnalysisDetail(
       finalDecisionResult.reasons[0]?.message ??
       decisionResult.primaryReason;
 
+    const contextStats =
+      analysisRow.context_stats &&
+      typeof analysisRow.context_stats === "object" &&
+      !Array.isArray(analysisRow.context_stats)
+        ? (analysisRow.context_stats as Record<string, unknown>)
+        : null;
+    const impactStats =
+      contextStats?.impact &&
+      typeof contextStats.impact === "object" &&
+      !Array.isArray(contextStats.impact)
+        ? (contextStats.impact as Record<string, unknown>)
+        : null;
+    const impactGraph: ImpactGraphData | null = parsePersistedImpactGraph(
+      impactStats?.graph,
+    );
+
     const statsOverride = (
-      analysisRow.context_stats as {
+      contextStats as {
         humanOverride?: {
           action?: string;
           note?: string | null;
@@ -620,6 +639,7 @@ export async function getAnalysisDetail(
         intentScope: deterministicResult?.intentScope ?? null,
         finalDecisionResult,
         affectedAreas,
+        impactGraph,
         humanOverride,
         checkRun,
       },
@@ -914,124 +934,7 @@ async function executeAnalysisJob(job: {
 
     const durationMs = Math.max(0, Date.now() - startedMs);
 
-    const changedFilesJson = result.deterministic.changedFiles.map((f) => ({
-      path: f.path,
-      previous_path: f.previousPath ?? "",
-      status: f.status,
-      additions: f.additions,
-      deletions: f.deletions,
-      category: f.category,
-      is_binary: f.isBinary,
-      excluded_from_ai: f.excludedFromAi,
-      exclude_reason: f.excludeReason ?? "",
-      patch_excerpt: f.excludedFromAi
-        ? ""
-        : (f.patchExcerpt?.slice(0, 1500) ?? ""),
-    }));
-
-    const findingsJson = result.ai.findings.map((f, index) => ({
-      category: f.category,
-      severity: f.severity,
-      title: f.title,
-      summary: f.summary,
-      explanation: f.explanation,
-      evidence: f.evidence,
-      affected_files: f.affectedFiles,
-      confidence: f.confidence,
-      is_inference: f.isInference,
-      sort_order: index,
-    }));
-
-    const riskFactorsJson = result.risk.factors.map((f) => ({
-      category: f.category,
-      severity: f.severity,
-      score_contribution: f.scoreContribution,
-      title: f.title,
-      description: f.description,
-      source_file: f.sourceFile ?? "",
-      metadata: (f.metadata ?? {}) as Json,
-    }));
-
-    const affectedAreasJson = result.affectedAreas.map((a) => ({
-      file_path: a.filePath,
-      affected_area: a.affectedArea,
-      impact_type: a.impactType,
-      confidence: a.confidence,
-      explanation: a.explanation ?? "",
-    }));
-
-    // Atomic persistence: findings + factors + affected areas + final_decision
-    // (migration 005). Fallback sequential path if RPC not yet applied.
-    const rpcArgs: Record<string, unknown> = {
-      p_analysis_id: job.analysisId,
-      p_pull_request_id: job.pullRequestId,
-      p_head_sha: job.headSha,
-      p_summary: result.ai.summary,
-      p_overall_status: result.ai.overallStatus,
-      p_files_changed: result.deterministic.filesChanged,
-      p_lines_added: result.deterministic.linesAdded,
-      p_lines_deleted: result.deterministic.linesDeleted,
-      p_provider: result.ai.provider,
-      p_model: result.ai.model,
-      p_deterministic_result: result.deterministic as unknown as Json,
-      p_context_stats: {
-        ...result.context.stats,
-        baseSha: result.baseSha,
-        headSha: result.headSha,
-        intentScope: result.intentScope,
-        decisionEngine: result.finalDecision,
-        impact: {
-          classification: result.impact.impactClassification,
-          confidence: result.impact.confidence,
-          explanation: result.impact.explanation,
-          directDependents: result.impact.directDependencyCount,
-          totalDependents: result.impact.totalDependencyCount,
-          routes: result.impact.affectedRoutes,
-          graphMeta: result.impact.graphMeta,
-        },
-      } as unknown as Json,
-      p_risk_classification: result.risk.riskClassification,
-      p_duration_ms: durationMs,
-      p_changed_files: changedFilesJson as unknown as Json,
-      p_findings: findingsJson as unknown as Json,
-      p_risk_factors: riskFactorsJson as unknown as Json,
-      p_event_message: `Analysis completed with ${result.ai.findings.length} finding(s); decision ${result.finalDecision.finalDecision}; impact ${result.impact.impactClassification}`,
-      p_event_metadata: {
-        overall_status: result.ai.overallStatus,
-        findings: result.ai.findings.length,
-        duration_ms: durationMs,
-        head_sha: job.headSha,
-        scope_match: result.intentScope.scopeMatch,
-        scope_score: result.intentScope.scopeScore,
-        final_decision: result.finalDecision.finalDecision,
-        risk_score: result.risk.riskScore,
-        impact_classification: result.impact.impactClassification,
-      } as unknown as Json,
-      p_risk_score: result.risk.riskScore,
-      p_scope_score: result.intentScope.scopeScore,
-      p_scope_classification: result.intentScope.scopeClassificationDb,
-      p_impact_classification: result.finalDecision.impactClassification,
-      p_final_decision: result.finalDecision.finalDecision,
-      p_affected_areas: affectedAreasJson as unknown as Json,
-    };
-
-    const { error: persistError } = await (
-      admin as unknown as {
-        rpc: (
-          fn: string,
-          args: Record<string, unknown>,
-        ) => Promise<{ error: { message: string } | null }>;
-      }
-    ).rpc("complete_analysis_atomic", rpcArgs);
-
-    if (persistError) {
-      if (/function .* does not exist|schema cache|could not find/i.test(persistError.message)) {
-        await persistAnalysisSequential(admin, job, result, durationMs);
-      } else {
-        await cleanupAnalysisChildren(admin, job.analysisId);
-        throw new Error(`Atomic persistence failed: ${persistError.message}`);
-      }
-    }
+    await persistCompletedAnalysis(admin, job, result, durationMs);
 
     // Persist extracted task row (best-effort)
     try {
@@ -1114,7 +1017,14 @@ async function executeAnalysisJob(job: {
       "error",
     );
 
-    await cleanupAnalysisChildren(admin, job.analysisId);
+    try {
+      await cleanupAnalysisChildren(admin, job.analysisId);
+    } catch (cleanupErr) {
+      console.error(
+        "Analysis child cleanup failed while recording analysis failure:",
+        cleanupErr,
+      );
+    }
 
     await admin
       .from("analyses")
@@ -1137,16 +1047,180 @@ async function executeAnalysisJob(job: {
   }
 }
 
+/**
+ * Writes a finished analysis through complete_analysis_atomic, or the
+ * sequential fallback when that RPC is not installed. Both paths store
+ * context_stats from buildPersistedContextStats, including impact.graph.
+ */
+export async function persistCompletedAnalysis(
+  admin: ReturnType<typeof createAdminClient>,
+  job: {
+    analysisId: string;
+    pullRequestId: string;
+    headSha: string;
+  },
+  result: Awaited<ReturnType<typeof runPullRequestAnalysis>>,
+  durationMs: number,
+): Promise<void> {
+  const changedFilesJson = result.deterministic.changedFiles.map((f) => ({
+    path: f.path,
+    previous_path: f.previousPath ?? "",
+    status: f.status,
+    additions: f.additions,
+    deletions: f.deletions,
+    category: f.category,
+    is_binary: f.isBinary,
+    excluded_from_ai: f.excludedFromAi,
+    exclude_reason: f.excludeReason ?? "",
+    patch_excerpt: f.excludedFromAi
+      ? ""
+      : (f.patchExcerpt?.slice(0, 1500) ?? ""),
+  }));
+
+  const findingsJson = result.ai.findings.map((f, index) => ({
+    category: f.category,
+    severity: f.severity,
+    title: f.title,
+    summary: f.summary,
+    explanation: f.explanation,
+    evidence: f.evidence,
+    affected_files: f.affectedFiles,
+    confidence: f.confidence,
+    is_inference: f.isInference,
+    sort_order: index,
+  }));
+
+  const riskFactorsJson = result.risk.factors.map((f) => ({
+    category: f.category,
+    severity: f.severity,
+    score_contribution: f.scoreContribution,
+    title: f.title,
+    description: f.description,
+    source_file: f.sourceFile ?? "",
+    metadata: (f.metadata ?? {}) as Json,
+  }));
+
+  const affectedAreasJson = result.affectedAreas.map((a) => ({
+    file_path: a.filePath,
+    affected_area: a.affectedArea,
+    impact_type: a.impactType,
+    confidence: a.confidence,
+    explanation: a.explanation ?? "",
+  }));
+
+  // Atomic persistence: findings + factors + affected areas + final_decision
+  // (migration 005). Fallback sequential path if RPC not yet applied.
+  const rpcArgs: Record<string, unknown> = {
+    p_analysis_id: job.analysisId,
+    p_pull_request_id: job.pullRequestId,
+    p_head_sha: job.headSha,
+    p_summary: result.ai.summary,
+    p_overall_status: result.ai.overallStatus,
+    p_files_changed: result.deterministic.filesChanged,
+    p_lines_added: result.deterministic.linesAdded,
+    p_lines_deleted: result.deterministic.linesDeleted,
+    p_provider: result.ai.provider,
+    p_model: result.ai.model,
+    p_deterministic_result: result.deterministic as unknown as Json,
+    p_context_stats: buildPersistedContextStats({
+      contextStats: result.context.stats,
+      baseSha: result.baseSha,
+      headSha: result.headSha,
+      intentScope: result.intentScope,
+      decisionEngine: result.finalDecision,
+      impact: result.impact,
+    }) as unknown as Json,
+    p_risk_classification: result.risk.riskClassification,
+    p_duration_ms: durationMs,
+    p_changed_files: changedFilesJson as unknown as Json,
+    p_findings: findingsJson as unknown as Json,
+    p_risk_factors: riskFactorsJson as unknown as Json,
+    p_event_message: `Analysis completed with ${result.ai.findings.length} finding(s); decision ${result.finalDecision.finalDecision}; impact ${result.impact.impactClassification}`,
+    p_event_metadata: {
+      overall_status: result.ai.overallStatus,
+      findings: result.ai.findings.length,
+      duration_ms: durationMs,
+      head_sha: job.headSha,
+      scope_match: result.intentScope.scopeMatch,
+      scope_score: result.intentScope.scopeScore,
+      final_decision: result.finalDecision.finalDecision,
+      risk_score: result.risk.riskScore,
+      impact_classification: result.impact.impactClassification,
+    } as unknown as Json,
+    p_risk_score: result.risk.riskScore,
+    p_scope_score: result.intentScope.scopeScore,
+    p_scope_classification: result.intentScope.scopeClassificationDb,
+    p_impact_classification: result.finalDecision.impactClassification,
+    p_final_decision: result.finalDecision.finalDecision,
+    p_affected_areas: affectedAreasJson as unknown as Json,
+  };
+
+  const { error: persistError } = await (
+    admin as unknown as {
+      rpc: (
+        fn: string,
+        args: Record<string, unknown>,
+      ) => Promise<{ error: { message: string } | null }>;
+    }
+  ).rpc("complete_analysis_atomic", rpcArgs);
+
+  if (persistError) {
+    if (isMissingAtomicRpc(persistError.message)) {
+      await persistAnalysisSequential(admin, job, result, durationMs);
+    } else {
+      await rethrowAfterCleanup(
+        admin,
+        job.analysisId,
+        new Error(`Atomic persistence failed: ${persistError.message}`),
+      );
+    }
+  }
+}
+
+/**
+ * PostgREST/Postgres signals that complete_analysis_atomic is not installed.
+ * A bare "could not find" is not enough: it also appears in unrelated row errors.
+ */
+function isMissingAtomicRpc(message: string): boolean {
+  return /function .* does not exist|schema cache|could not find the function|PGRST202/i.test(
+    message,
+  );
+}
+
 async function cleanupAnalysisChildren(
   admin: ReturnType<typeof createAdminClient>,
   analysisId: string,
 ): Promise<void> {
-  await Promise.all([
+  const results = await Promise.all([
     admin.from("analysis_changed_files").delete().eq("analysis_id", analysisId),
     admin.from("analysis_findings").delete().eq("analysis_id", analysisId),
     admin.from("risk_factors").delete().eq("analysis_id", analysisId),
     admin.from("affected_areas").delete().eq("analysis_id", analysisId),
   ]);
+  const failed = results.find((result) => result.error);
+  if (failed?.error) {
+    throw new Error(failed.error.message);
+  }
+}
+
+/**
+ * Child cleanup is best-effort. A delete failure must not replace the
+ * persistence error, and it cannot guarantee the child rows are gone.
+ */
+async function rethrowAfterCleanup(
+  admin: ReturnType<typeof createAdminClient>,
+  analysisId: string,
+  error: Error,
+): Promise<never> {
+  try {
+    await cleanupAnalysisChildren(admin, analysisId);
+  } catch (cleanupErr) {
+    console.error(
+      "Analysis child cleanup failed after a persistence error:",
+      cleanupErr,
+    );
+  }
+  throw error;
 }
 
 /**
@@ -1185,11 +1259,17 @@ async function persistAnalysisSequential(
       })),
     );
     if (error) {
-      await cleanupAnalysisChildren(admin, job.analysisId);
-      throw new Error(`Failed to persist changed files: ${error.message}`);
+      await rethrowAfterCleanup(
+        admin,
+        job.analysisId,
+        new Error(`Failed to persist changed files: ${error.message}`),
+      );
     }
   }
 
+  // computeRiskFromFindings emits one factor per AI finding and none for
+  // sensitive-area score adjustments. An empty findings list therefore has
+  // an empty factors list. Factors are written with the findings they came from.
   if (result.ai.findings.length > 0) {
     const { error } = await admin.from("analysis_findings").insert(
       result.ai.findings.map((f, index) => ({
@@ -1207,8 +1287,11 @@ async function persistAnalysisSequential(
       })),
     );
     if (error) {
-      await cleanupAnalysisChildren(admin, job.analysisId);
-      throw new Error(`Failed to persist findings: ${error.message}`);
+      await rethrowAfterCleanup(
+        admin,
+        job.analysisId,
+        new Error(`Failed to persist findings: ${error.message}`),
+      );
     }
 
     const { error: riskError } = await admin.from("risk_factors").insert(
@@ -1224,8 +1307,11 @@ async function persistAnalysisSequential(
       })),
     );
     if (riskError) {
-      await cleanupAnalysisChildren(admin, job.analysisId);
-      throw new Error(`Failed to persist risk factors: ${riskError.message}`);
+      await rethrowAfterCleanup(
+        admin,
+        job.analysisId,
+        new Error(`Failed to persist risk factors: ${riskError.message}`),
+      );
     }
   }
 
@@ -1241,12 +1327,15 @@ async function persistAnalysisSequential(
       })),
     );
     if (areasError) {
-      await cleanupAnalysisChildren(admin, job.analysisId);
-      throw new Error(`Failed to persist affected areas: ${areasError.message}`);
+      await rethrowAfterCleanup(
+        admin,
+        job.analysisId,
+        new Error(`Failed to persist affected areas: ${areasError.message}`),
+      );
     }
   }
 
-  const { error: updateError } = await admin
+  const { data: updated, error: updateError } = await admin
     .from("analyses")
     .update({
       status: "completed",
@@ -1260,22 +1349,14 @@ async function persistAnalysisSequential(
       provider: result.ai.provider,
       model: result.ai.model,
       deterministic_result: result.deterministic as unknown as Json,
-      context_stats: {
-        ...result.context.stats,
+      context_stats: buildPersistedContextStats({
+        contextStats: result.context.stats,
         baseSha: result.baseSha,
         headSha: result.headSha,
         intentScope: result.intentScope,
         decisionEngine: result.finalDecision,
-        impact: {
-          classification: result.impact.impactClassification,
-          confidence: result.impact.confidence,
-          explanation: result.impact.explanation,
-          directDependents: result.impact.directDependencyCount,
-          totalDependents: result.impact.totalDependencyCount,
-          routes: result.impact.affectedRoutes,
-          graphMeta: result.impact.graphMeta,
-        },
-      } as unknown as Json,
+        impact: result.impact,
+      }) as unknown as Json,
       error_message: null,
       risk_score: result.risk.riskScore,
       risk_classification: result.risk.riskClassification,
@@ -1285,11 +1366,20 @@ async function persistAnalysisSequential(
       final_decision: result.finalDecision.finalDecision,
     })
     .eq("id", job.analysisId)
-    .eq("head_sha", job.headSha);
+    .eq("head_sha", job.headSha)
+    .select("id")
+    .maybeSingle();
 
-  if (updateError) {
-    await cleanupAnalysisChildren(admin, job.analysisId);
-    throw new Error(`Failed to finalize analysis: ${updateError.message}`);
+  if (updateError || !updated) {
+    await rethrowAfterCleanup(
+      admin,
+      job.analysisId,
+      new Error(
+        updateError
+          ? `Failed to finalize analysis: ${updateError.message}`
+          : "Failed to finalize analysis: no analysis row matched the id and head SHA",
+      ),
+    );
   }
 
   await admin.from("analysis_events").insert({

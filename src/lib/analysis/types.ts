@@ -2,6 +2,7 @@
  * Stage 2 / 2.5 / 2.6 / 3 analysis domain types.
  */
 
+import type { ImpactGraphData } from "@/lib/analysis/impact/impact-graph";
 import type { IntentScopeResult } from "@/lib/analysis/scope/types";
 
 export type {
@@ -248,6 +249,11 @@ export interface AnalysisDetail extends AnalysisRecord {
     confidence: number | null;
     explanation: string | null;
   }>;
+  /**
+   * Validated version-1 impact graph from context_stats.impact.graph.
+   * Null for historical rows and for missing or invalid persisted graphs.
+   */
+  impactGraph: ImpactGraphData | null;
   /** Stage 5 — latest human override (advisory; engine decision unchanged). */
   humanOverride: {
     action: "approve" | "keep_blocked";

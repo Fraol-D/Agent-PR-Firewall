@@ -131,3 +131,30 @@ export function resolveToExistingFile(
   }
   return null;
 }
+
+/** Next.js App Router / Pages convention helpers. */
+export function isRouteLikePath(path: string): boolean {
+  const p = normalizePath(path);
+  return (
+    /(^|\/)app\/.*\/(page|layout|route|loading|error|template)\.(tsx?|jsx?)$/i.test(
+      p,
+    ) ||
+    /(^|\/)pages\/.+\.(tsx?|jsx?)$/i.test(p) ||
+    /(^|\/)app\/(page|layout|route)\.(tsx?|jsx?)$/i.test(p)
+  );
+}
+
+export function classifyModuleArea(path: string): string {
+  const p = normalizePath(path).toLowerCase();
+  if (/(^|\/)(auth|session|oauth|middleware)/.test(p)) return "Authentication";
+  if (/(^|\/)(migrations?|prisma|drizzle|supabase|database|sql)/.test(p)) {
+    return "Database";
+  }
+  if (isRouteLikePath(p)) return "Route";
+  if (/(^|\/)app\//.test(p) || /(^|\/)pages\//.test(p)) return "App UI";
+  if (/(^|\/)components?\//.test(p)) return "UI Components";
+  if (/(^|\/)(api|services?|server)\//.test(p)) return "Backend";
+  if (/(^|\/)lib\//.test(p)) return "Library";
+  if (/(^|\/)hooks?\//.test(p)) return "Hooks";
+  return "Module";
+}

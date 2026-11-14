@@ -200,7 +200,9 @@ begin
     impact_classification = coalesce(p_impact_classification, impact_classification),
     final_decision = coalesce(p_final_decision, final_decision)
   where id = p_analysis_id
-    and head_sha = p_head_sha;
+    and pull_request_id = p_pull_request_id
+    and head_sha = p_head_sha
+    and status in ('pending', 'running');
 
   if not found then
     raise exception 'analysis_update_failed';

@@ -4,12 +4,14 @@
  */
 
 import {
+  buildImpactGraphData,
+  buildImpactImportIndex,
   classifyModuleArea,
   collectDependents,
   isRouteLikePath,
   buildReverseImportGraph,
+  type ImpactGraphData,
 } from "@/lib/analysis/impact/import-graph";
-import { fetchRepositorySources } from "@/lib/analysis/impact/fetch-sources";
 import { normalizePath } from "@/lib/analysis/impact/parse-imports";
 import type { ChangedFileEvidence } from "@/lib/analysis/types";
 import type { ImpactClassification } from "@/types/domain";
@@ -42,6 +44,8 @@ export interface ImpactAnalysisResult {
     truncated: boolean;
     fetchErrors: number;
   };
+  /** Interactive dependency impact graph data. */
+  impactGraph: ImpactGraphData;
 }
 
 export interface AnalyzeImpactInput {
@@ -52,6 +56,8 @@ export interface AnalyzeImpactInput {
   changedFiles: ChangedFileEvidence[];
   /** Optional pre-fetched sources for tests */
   prefetchedSources?: Map<string, string>;
+  /** Optional explicit scan truncation flag when using prefetchedSources */
+  scanTruncated?: boolean;
 }
 
 /**
@@ -66,7 +72,7 @@ export async function analyzeImpact(
   const priorityPaths = input.changedFiles.map((f) => f.path);
 
   let files: Map<string, string>;
-  let truncated = false;
+  let truncated = input.scanTruncated === true;
   let fetchErrors = 0;
   let treeFileCount = 0;
   let fetchedCount = 0;
@@ -76,6 +82,9 @@ export async function analyzeImpact(
     fetchedCount = files.size;
   } else {
     try {
+      const { fetchRepositorySources } = await import(
+        "@/lib/analysis/impact/fetch-sources"
+      );
       const fetched = await fetchRepositorySources({
         owner: input.owner,
         repo: input.repo,
@@ -94,6 +103,7 @@ export async function analyzeImpact(
       return emptyImpactResult(
         `Import graph unavailable (${message}). Impact not fully assessed.`,
         0.25,
+        input.changedFiles,
       );
     }
   }
@@ -106,8 +116,18 @@ export async function analyzeImpact(
     }
   }
 
-  const graphResult = buildReverseImportGraph(files);
+  // Build the shared import index once and reuse it for both reverse-graph
+  // dependent aggregation and ImpactGraphData construction.
+  const importIndex = buildImpactImportIndex(files, input.changedFiles);
+  const graphResult = buildReverseImportGraph(files, {
+    changedFiles: input.changedFiles,
+    importIndex,
+  });
   truncated = truncated || graphResult.truncated;
+
+  const changedPathSet = new Set(
+    input.changedFiles.map((f) => normalizePath(f.path)),
+  );
 
   const perFile: FileImpactDetail[] = [];
   const allDirect = new Set<string>();
@@ -120,19 +140,24 @@ export async function analyzeImpact(
     moduleAreas.add(classifyModuleArea(path));
 
     const deps = collectDependents(graphResult.reverseGraph, path, 3);
-    for (const d of deps.direct) allDirect.add(d);
-    for (const d of deps.indirect) {
-      if (!deps.direct.includes(d)) allIndirect.add(d);
-    }
+    // Exclude files already modified by the PR from unmodified downstream dependent counts
+    const directUnmodified = deps.direct.filter((d) => !changedPathSet.has(d));
+    const indirectUnmodified = deps.indirect.filter(
+      (d) => !changedPathSet.has(d) && !directUnmodified.includes(d),
+    );
+    const allUnmodified = [...directUnmodified, ...indirectUnmodified];
 
-    const routes = deps.all.filter(isRouteLikePath);
+    for (const d of directUnmodified) allDirect.add(d);
+    for (const d of indirectUnmodified) allIndirect.add(d);
+
+    const routes = allUnmodified.filter(isRouteLikePath);
     for (const r of routes) allRoutes.add(r);
 
     perFile.push({
       path,
-      directDependents: deps.direct,
-      indirectDependents: deps.indirect,
-      dependencyCount: deps.all.length,
+      directDependents: directUnmodified,
+      indirectDependents: indirectUnmodified,
+      dependencyCount: allUnmodified.length,
       affectedRoutes: routes,
     });
   }
@@ -173,6 +198,15 @@ export async function analyzeImpact(
     explanation,
   });
 
+  const impactGraph = buildImpactGraphData({
+    files,
+    changedFiles: input.changedFiles,
+    importIndex,
+    scanTruncated: truncated,
+    fetchErrorCount: fetchErrors,
+    treeFileCount: treeFileCount > 0 ? treeFileCount : null,
+  });
+
   return {
     impactClassification,
     confidence,
@@ -190,6 +224,7 @@ export async function analyzeImpact(
       truncated,
       fetchErrors,
     },
+    impactGraph,
   };
 }
 
@@ -329,6 +364,7 @@ function buildGraphAffectedAreas(input: {
 function emptyImpactResult(
   explanation: string,
   confidence: number,
+  changedFiles: ChangedFileEvidence[] = [],
 ): ImpactAnalysisResult {
   return {
     impactClassification: "UNKNOWN",
@@ -355,6 +391,13 @@ function emptyImpactResult(
       truncated: false,
       fetchErrors: 1,
     },
+    impactGraph: buildImpactGraphData({
+      files: new Map(),
+      changedFiles,
+      scanTruncated: false,
+      fetchErrorCount: 1,
+      treeFileCount: null,
+    }),
   };
 }
 

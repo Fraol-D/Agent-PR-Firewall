@@ -71,18 +71,38 @@ export async function recordHumanOverride(input: {
     const now = new Date().toISOString();
 
     const admin = createAdminClient();
-    const { data: analysisRow } = await admin
+    const { data: analysisRow, error: statsError } = await admin
       .from("analyses")
       .select("id, context_stats")
       .eq("id", input.analysisId)
       .maybeSingle();
 
-    const stats =
-      analysisRow?.context_stats &&
-      typeof analysisRow.context_stats === "object" &&
-      !Array.isArray(analysisRow.context_stats)
-        ? (analysisRow.context_stats as Record<string, unknown>)
-        : {};
+    if (statsError) {
+      return {
+        ok: false,
+        error: statsError.message || "Failed to load analysis context",
+        code: "db_error",
+      };
+    }
+    if (!analysisRow) {
+      return { ok: false, error: "Analysis not found", code: "not_found" };
+    }
+
+    // null is an empty column value and is safe to replace. An array or a
+    // scalar is corrupt: do not overwrite it with a partial object.
+    const rawStats = analysisRow.context_stats;
+    let stats: Record<string, unknown>;
+    if (rawStats == null) {
+      stats = {};
+    } else if (typeof rawStats === "object" && !Array.isArray(rawStats)) {
+      stats = rawStats as Record<string, unknown>;
+    } else {
+      return {
+        ok: false,
+        error: "Analysis context_stats is malformed",
+        code: "db_error",
+      };
+    }
 
     const override: HumanOverrideRecord = {
       action: input.action,
@@ -92,7 +112,12 @@ export async function recordHumanOverride(input: {
       originalDecision,
     };
 
-    await admin
+    // Full-object write. Two overrides that read the same stats can each
+    // replace humanOverride; the later write wins. impact.graph stays when
+    // both reads loaded this object. analyses has no row version to compare.
+    // select() makes a zero-row update visible: PostgREST returns no error
+    // when the filter matches nothing.
+    const { data: updated, error: updateError } = await admin
       .from("analyses")
       .update({
         context_stats: {
@@ -100,7 +125,20 @@ export async function recordHumanOverride(input: {
           humanOverride: override,
         } as unknown as Json,
       })
-      .eq("id", input.analysisId);
+      .eq("id", input.analysisId)
+      .select("id")
+      .maybeSingle();
+
+    if (updateError) {
+      return {
+        ok: false,
+        error: updateError.message || "Failed to record override",
+        code: "db_error",
+      };
+    }
+    if (!updated) {
+      return { ok: false, error: "Analysis not found", code: "not_found" };
+    }
 
     await admin.from("analysis_events").insert({
       analysis_id: input.analysisId,
