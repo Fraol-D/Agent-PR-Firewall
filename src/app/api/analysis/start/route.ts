@@ -1,7 +1,14 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 
-import { getAuthUser } from "@/lib/auth/session";
 import { isAiProviderConfigured } from "@/lib/analysis/ai";
+import {
+  jsonError,
+  jsonOk,
+  parseJsonBody,
+  requireApiUser,
+  requireStringField,
+  statusFromServiceCode,
+} from "@/lib/api/route-helpers";
 import { isAdminClientConfigured } from "@/lib/supabase/admin";
 import { startPullRequestAnalysis } from "@/services/analyses";
 
@@ -12,63 +19,48 @@ export const maxDuration = 300;
  * Body: { pullRequestId: string, force?: boolean }
  */
 export async function POST(request: NextRequest) {
-  const user = await getAuthUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireApiUser();
+  if (auth.error) {
+    return auth.error;
   }
 
   if (!isAdminClientConfigured()) {
-    return NextResponse.json(
-      { error: "Server database admin client is not configured" },
-      { status: 503 },
-    );
+    return jsonError(503, "Server database admin client is not configured");
   }
 
   if (!isAiProviderConfigured()) {
-    return NextResponse.json(
-      {
-        error:
-          "AI provider is not configured. Set OPENROUTER_API_KEY in the server environment (free model cohere/north-mini-code:free).",
-      },
-      { status: 503 },
+    return jsonError(
+      503,
+      "AI provider is not configured. Set OPENROUTER_API_KEY in the server environment (free model cohere/north-mini-code:free).",
     );
   }
 
-  let body: { pullRequestId?: string; force?: boolean };
-  try {
-    body = (await request.json()) as { pullRequestId?: string; force?: boolean };
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  const parsed = await parseJsonBody<{
+    pullRequestId?: string;
+    force?: boolean;
+  }>(request);
+  if (parsed.error) {
+    return parsed.error;
   }
 
-  if (!body.pullRequestId) {
-    return NextResponse.json(
-      { error: "pullRequestId is required" },
-      { status: 400 },
-    );
+  const pullRequestId = requireStringField(parsed.body, "pullRequestId");
+  if (pullRequestId.error) {
+    return pullRequestId.error;
   }
 
   const result = await startPullRequestAnalysis({
-    userId: user.id,
-    pullRequestId: body.pullRequestId,
-    force: Boolean(body.force),
+    userId: auth.user.id,
+    pullRequestId: pullRequestId.value,
+    force: Boolean(parsed.body.force),
   });
 
   if (!result.ok) {
-    const status =
-      result.code === "unauthorized"
-        ? 403
-        : result.code === "not_found"
-          ? 404
-          : 400;
-    return NextResponse.json(
-      { error: result.error, code: result.code },
-      { status },
-    );
+    return jsonError(statusFromServiceCode(result.code), result.error, {
+      code: result.code,
+    });
   }
 
-  return NextResponse.json({
-    ok: true,
+  return jsonOk({
     analysisId: result.data.analysisId,
     reused: result.data.reused,
   });

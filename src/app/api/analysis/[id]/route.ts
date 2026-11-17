@@ -1,8 +1,12 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 
-import { getAuthUser } from "@/lib/auth/session";
-import { getAnalysisDetail } from "@/services/analyses";
+import {
+  jsonError,
+  jsonOk,
+  requireApiUser,
+} from "@/lib/api/route-helpers";
 import { createClient } from "@/lib/supabase/server";
+import { getAnalysisDetail } from "@/services/analyses";
 
 /**
  * GET /api/analysis/:id
@@ -12,38 +16,49 @@ export async function GET(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
-  const user = await getAuthUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireApiUser();
+  if (auth.error) {
+    return auth.error;
   }
 
   const { id } = await context.params;
+  if (!id || id.trim() === "") {
+    return jsonError(400, "Analysis id is required");
+  }
 
   // Resolve current head SHA for outdated detection
   const supabase = await createClient();
-  const { data: analysis } = await supabase
+  const { data: analysis, error: analysisError } = await supabase
     .from("analyses")
     .select("pull_request_id")
     .eq("id", id)
     .maybeSingle();
 
+  if (analysisError) {
+    return jsonError(500, "Failed to load analysis");
+  }
+
   let headSha: string | null = null;
   if (analysis) {
-    const { data: pr } = await supabase
+    const { data: pr, error: prError } = await supabase
       .from("pull_requests")
       .select("head_sha")
       .eq("id", analysis.pull_request_id)
       .maybeSingle();
+
+    if (prError) {
+      return jsonError(500, "Failed to load pull request context");
+    }
     headSha = pr?.head_sha ?? null;
   }
 
-  const result = await getAnalysisDetail(user.id, id, headSha);
+  const result = await getAnalysisDetail(auth.user.id, id, headSha);
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 500 });
+    return jsonError(500, result.error);
   }
   if (!result.data) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return jsonError(404, "Not found");
   }
 
-  return NextResponse.json({ ok: true, analysis: result.data });
+  return jsonOk({ analysis: result.data });
 }
